@@ -1,0 +1,51 @@
+[tool.poetry]
+name = "intelligent-web-scraper"
+version = "0.1.0"
+description = "An advanced example application for the Atomic Agents framework that demonstrates intelligent web scraping orchestration with AI-powered strategy planning"
+authors = ["Atomic Agents Team"]
+readme = "README.md"
+packages = [{include = "intelligent_web_scraper"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+atomic-agents = {path = "../atomic-agents", develop = true}
+requests = "^2.32.3"
+beautifulsoup4 = "^4.12.3"
+markdownify = "^0.13.1"
+readability-lxml = "^0.8.1"
+lxml-html-clean = "^0.4.0"
+lxml = "^5.3.0"
+python-dotenv = ">=1.0.1,<2.0.0"
+openai = ">=1.35.12,<2.0.0"
+rich = "^13.7.0"
+aiohttp = "^3.9.0"
+asyncio = "^3.4.3"
+pydantic = "^2.0.0"
+typing-extensions = "^4.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+pytest-mock = "^3.11.0"
+black = "^23.7.0"
+isort = "^5.12.0"
+flake8 = "^6.0.0"
+mypy = "^1.5.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
