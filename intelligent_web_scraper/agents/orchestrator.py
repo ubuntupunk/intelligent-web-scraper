@@ -516,19 +516,20 @@ class IntelligentScrapingOrchestrator(BaseAgent):
     
     async def _coordinate_with_planning_agent(self, request: IntelligentScrapingOrchestratorInputSchema) -> Dict[str, Any]:
         """
-        Coordinate with the planning agent to generate scraping strategy.
+        Coordinate with the enhanced planning agent to generate scraping strategy.
         
-        This method demonstrates agent coordination patterns by interfacing
-        with the AtomicScraperPlanningAgent to generate optimal strategies.
+        This method demonstrates advanced agent coordination patterns by interfacing
+        with the IntelligentWebScraperPlanningAgent for optimal strategies with
+        educational explanations and seamless orchestrator integration.
         """
         try:
             # Update website analysis context if available
             await self._update_website_analysis_context(request.target_url)
             
-            # Import the planning agent (would be injected in production)
-            from atomic_scraper_tool.agents.scraper_planning_agent import (
-                AtomicScraperPlanningAgent, 
-                AtomicScraperAgentInputSchema
+            # Import the enhanced planning agent
+            from .planning_agent import (
+                IntelligentWebScraperPlanningAgent, 
+                IntelligentPlanningAgentInputSchema
             )
             
             # Create planning agent with same client configuration
@@ -536,17 +537,25 @@ class IntelligentScrapingOrchestrator(BaseAgent):
                 client=self.client,
                 model=self.config.planning_agent_model
             )
-            planning_agent = AtomicScraperPlanningAgent(planning_config)
+            planning_agent = IntelligentWebScraperPlanningAgent(planning_config)
             
-            # Transform orchestrator input to planning agent input
-            planning_input = AtomicScraperAgentInputSchema(
-                request=request.scraping_request,
+            # Transform orchestrator input to enhanced planning agent input
+            orchestrator_context = {
+                'educational_mode': True,
+                'monitoring_enabled': request.enable_monitoring,
+                'concurrent_instances': request.concurrent_instances,
+                'export_format': request.export_format
+            }
+            
+            planning_input = IntelligentPlanningAgentInputSchema(
+                scraping_request=request.scraping_request,
                 target_url=request.target_url,
                 max_results=request.max_results,
-                quality_threshold=request.quality_threshold
+                quality_threshold=request.quality_threshold,
+                orchestrator_context=orchestrator_context
             )
             
-            # Execute planning agent
+            # Execute enhanced planning agent
             planning_result = planning_agent.run(planning_input)
             
             return {
@@ -554,7 +563,9 @@ class IntelligentScrapingOrchestrator(BaseAgent):
                 "strategy": planning_result.strategy,
                 "schema_recipe": planning_result.schema_recipe,
                 "reasoning": planning_result.reasoning,
-                "confidence": planning_result.confidence
+                "confidence": planning_result.confidence,
+                "orchestrator_metadata": planning_result.orchestrator_metadata,
+                "educational_insights": planning_result.educational_insights
             }
             
         except Exception as e:

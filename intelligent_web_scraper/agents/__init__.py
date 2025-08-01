@@ -6,5 +6,9 @@ atomic-agents patterns for orchestration and coordination.
 """
 
 from .orchestrator import IntelligentScrapingOrchestrator
+from .planning_agent import IntelligentWebScraperPlanningAgent
 
-__all__ = ["IntelligentScrapingOrchestrator"]
+__all__ = [
+    "IntelligentScrapingOrchestrator",
+    "IntelligentWebScraperPlanningAgent"
+]
