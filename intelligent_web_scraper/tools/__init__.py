@@ -1,8 +1,35 @@
 """
 Tools module for the Intelligent Web Scraper.
 
-This module contains tool integrations and factory patterns for managing
-scraping tools within the atomic-agents framework.
+This module provides the integrated AtomicScraperTool and supporting
+factory classes for proper configuration management and dependency injection.
 """
 
-__all__ = []
+from .atomic_scraper_tool import (
+    AtomicScraperTool,
+    AtomicScraperToolConfig,
+    AtomicScraperInputSchema,
+    AtomicScraperOutputSchema,
+    ScrapingError,
+    NetworkError,
+    QualityError
+)
+
+from .tool_factory import (
+    AtomicScraperToolFactory,
+    ConfigurationManager,
+    ToolConfigurationError
+)
+
+__all__ = [
+    'AtomicScraperTool',
+    'AtomicScraperToolConfig',
+    'AtomicScraperInputSchema',
+    'AtomicScraperOutputSchema',
+    'ScrapingError',
+    'NetworkError',
+    'QualityError',
+    'AtomicScraperToolFactory',
+    'ConfigurationManager',
+    'ToolConfigurationError'
+]
