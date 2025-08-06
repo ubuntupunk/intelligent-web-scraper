@@ -224,4 +224,286 @@ class AlertManager:
         """Add an alert rule."""
         with self.rules_lock:
             self.alert_rules[rule.rule_id] = rule
-       
+            logger.info(f"Added alert rule: {rule.name}")
+    
+    def remove_rule(self, rule_id: str) -> bool:
+        """Remove an alert rule."""
+        with self.rules_lock:
+            if rule_id in self.alert_rules:
+                del self.alert_rules[rule_id]
+                logger.info(f"Removed alert rule: {rule_id}")
+                return True
+            return False
+    
+    def get_rule(self, rule_id: str) -> Optional[AlertRule]:
+        """Get an alert rule by ID."""
+        with self.rules_lock:
+            return self.alert_rules.get(rule_id)
+    
+    def list_rules(self) -> List[AlertRule]:
+        """Get all alert rules."""
+        with self.rules_lock:
+            return list(self.alert_rules.values())
+    
+    def evaluate_rules(self, metrics: Dict[str, float], source: str = "system") -> List[Alert]:
+        """Evaluate all rules against current metrics."""
+        triggered_alerts = []
+        
+        with self.rules_lock:
+            for rule in self.alert_rules.values():
+                # Get metric value for this rule
+                metric_key = self._get_metric_key_for_rule(rule)
+                if metric_key not in metrics:
+                    continue
+                
+                current_value = metrics[metric_key]
+                
+                # Check if rule should trigger
+                if rule.should_trigger(current_value):
+                    alert = self._create_alert_from_rule(rule, current_value, source)
+                    triggered_alerts.append(alert)
+                    
+                    # Update rule last triggered time
+                    rule.last_triggered = datetime.utcnow()
+        
+        return triggered_alerts
+    
+    def _get_metric_key_for_rule(self, rule: AlertRule) -> str:
+        """Get the metric key that corresponds to an alert rule."""
+        # Map rule types to metric keys
+        metric_mapping = {
+            "high_memory_usage": "memory_usage_mb",
+            "critical_memory_usage": "memory_usage_mb",
+            "high_error_rate": "error_rate",
+            "low_success_rate": "success_rate",
+            "instance_unresponsive": "idle_time_seconds"
+        }
+        return metric_mapping.get(rule.rule_id, "unknown")
+    
+    def _create_alert_from_rule(self, rule: AlertRule, current_value: float, source: str) -> Alert:
+        """Create an alert from a triggered rule."""
+        import uuid
+        
+        alert_id = f"{rule.rule_id}_{uuid.uuid4().hex[:8]}"
+        
+        # Create descriptive message
+        message = f"{rule.name}: Current value {current_value:.2f} exceeds threshold {rule.threshold:.2f}"
+        
+        alert = Alert(
+            alert_id=alert_id,
+            level=rule.level,
+            alert_type=rule.alert_type,
+            title=rule.name,
+            message=message,
+            source=source,
+            metadata={
+                'rule_id': rule.rule_id,
+                'current_value': current_value,
+                'threshold': rule.threshold,
+                'condition': rule.condition
+            }
+        )
+        
+        return alert
+    
+    def add_alert(self, alert: Alert) -> None:
+        """Add a new alert."""
+        with self.alerts_lock:
+            # Add to active alerts
+            self.active_alerts[alert.alert_id] = alert
+            
+            # Add to history
+            self.alert_history.append(alert)
+            
+            # Update statistics
+            self.stats['total_alerts'] += 1
+            self.stats['alerts_by_level'][alert.level.value] += 1
+            self.stats['alerts_by_type'][alert.alert_type.value] += 1
+            
+            logger.warning(f"New {alert.level.value} alert: {alert.title}")
+        
+        # Send notifications
+        self._send_notifications(alert)
+    
+    def acknowledge_alert(self, alert_id: str) -> bool:
+        """Acknowledge an alert."""
+        with self.alerts_lock:
+            if alert_id in self.active_alerts:
+                alert = self.active_alerts[alert_id]
+                alert.acknowledge()
+                self.stats['acknowledged_alerts'] += 1
+                logger.info(f"Alert acknowledged: {alert_id}")
+                return True
+            return False
+    
+    def resolve_alert(self, alert_id: str) -> bool:
+        """Resolve an alert."""
+        with self.alerts_lock:
+            if alert_id in self.active_alerts:
+                alert = self.active_alerts[alert_id]
+                alert.resolve()
+                self.stats['resolved_alerts'] += 1
+                
+                # Remove from active alerts
+                del self.active_alerts[alert_id]
+                
+                logger.info(f"Alert resolved: {alert_id}")
+                return True
+            return False
+    
+    def get_active_alerts(self, level: Optional[AlertLevel] = None) -> List[Alert]:
+        """Get active alerts, optionally filtered by level."""
+        with self.alerts_lock:
+            alerts = list(self.active_alerts.values())
+            
+            if level:
+                alerts = [alert for alert in alerts if alert.level == level]
+            
+            # Sort by timestamp (newest first)
+            alerts.sort(key=lambda a: a.timestamp, reverse=True)
+            
+            return alerts
+    
+    def get_alert_history(self, limit: int = 100) -> List[Alert]:
+        """Get alert history."""
+        with self.alerts_lock:
+            history = list(self.alert_history)
+            return history[-limit:] if limit else history
+    
+    def get_alert_stats(self) -> Dict[str, Any]:
+        """Get alert statistics."""
+        with self.alerts_lock:
+            stats = self.stats.copy()
+            stats['active_alerts'] = len(self.active_alerts)
+            stats['unacknowledged_alerts'] = len([
+                alert for alert in self.active_alerts.values() 
+                if not alert.acknowledged
+            ])
+            stats['critical_alerts'] = len([
+                alert for alert in self.active_alerts.values()
+                if alert.level == AlertLevel.CRITICAL
+            ])
+            return stats
+    
+    def add_notification_callback(self, callback: Callable[[Alert], None]) -> None:
+        """Add a notification callback function."""
+        self.notification_callbacks.append(callback)
+        logger.info("Added notification callback")
+    
+    def _send_notifications(self, alert: Alert) -> None:
+        """Send notifications for an alert."""
+        # Call notification callbacks
+        for callback in self.notification_callbacks:
+            try:
+                callback(alert)
+            except Exception as e:
+                logger.error(f"Notification callback failed: {e}")
+        
+        # Play sound for critical alerts
+        if self.enable_sound and alert.level == AlertLevel.CRITICAL:
+            self._play_alert_sound()
+    
+    def _play_alert_sound(self) -> None:
+        """Play alert sound (simplified implementation)."""
+        try:
+            # In a real implementation, would use a proper audio library
+            # For now, just log the sound alert
+            logger.warning("🔊 CRITICAL ALERT SOUND")
+            
+            # Could use system bell or audio file
+            # import winsound  # Windows
+            # winsound.Beep(1000, 500)
+            
+            # Or use cross-platform solution
+            # import pygame
+            # pygame.mixer.init()
+            # pygame.mixer.Sound("alert.wav").play()
+            
+        except Exception as e:
+            logger.error(f"Failed to play alert sound: {e}")
+    
+    def start_processing(self) -> None:
+        """Start background alert processing."""
+        if self.processing_thread is None or not self.processing_thread.is_alive():
+            self.processing_active.set()
+            self.processing_thread = threading.Thread(
+                target=self._processing_loop,
+                name="AlertProcessingThread",
+                daemon=True
+            )
+            self.processing_thread.start()
+            logger.info("Alert processing started")
+    
+    def stop_processing(self) -> None:
+        """Stop background alert processing."""
+        self.processing_active.clear()
+        self.shutdown_event.set()
+        
+        if self.processing_thread and self.processing_thread.is_alive():
+            self.processing_thread.join(timeout=5.0)
+        
+        logger.info("Alert processing stopped")
+    
+    def _processing_loop(self) -> None:
+        """Background processing loop for alert management."""
+        while self.processing_active.is_set() and not self.shutdown_event.is_set():
+            try:
+                # Clean up old resolved alerts
+                self._cleanup_old_alerts()
+                
+                # Auto-resolve alerts that are no longer relevant
+                self._auto_resolve_alerts()
+                
+                # Sleep for processing interval
+                time.sleep(10.0)
+                
+            except Exception as e:
+                logger.error(f"Error in alert processing loop: {e}")
+                time.sleep(5.0)
+    
+    def _cleanup_old_alerts(self) -> None:
+        """Clean up old resolved alerts."""
+        cutoff_time = datetime.utcnow() - timedelta(hours=24)  # Keep for 24 hours
+        
+        with self.alerts_lock:
+            # Remove old alerts from history
+            while (self.alert_history and 
+                   self.alert_history[0].timestamp < cutoff_time and 
+                   self.alert_history[0].resolved):
+                self.alert_history.popleft()
+    
+    def _auto_resolve_alerts(self) -> None:
+        """Auto-resolve alerts that are no longer relevant."""
+        # This would contain logic to automatically resolve alerts
+        # when conditions are no longer met
+        pass
+    
+    def clear_all_alerts(self) -> None:
+        """Clear all active alerts (for testing/reset)."""
+        with self.alerts_lock:
+            self.active_alerts.clear()
+            logger.info("All active alerts cleared")
+    
+    def create_custom_alert(
+        self, 
+        title: str, 
+        message: str, 
+        level: AlertLevel = AlertLevel.INFO,
+        source: str = "custom",
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Alert:
+        """Create a custom alert."""
+        import uuid
+        
+        alert = Alert(
+            alert_id=f"custom_{uuid.uuid4().hex[:8]}",
+            level=level,
+            alert_type=AlertType.CUSTOM,
+            title=title,
+            message=message,
+            source=source,
+            metadata=metadata or {}
+        )
+        
+        self.add_alert(alert)
+        return alert
