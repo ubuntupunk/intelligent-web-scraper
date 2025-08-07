@@ -17,6 +17,7 @@ import instructor
 from openai import OpenAI
 
 from ..config import IntelligentScrapingConfig
+from ..export import ExportManager, ExportFormat, ExportConfiguration, ExportData
 
 
 class IntelligentScrapingOrchestratorInputSchema(BaseIOSchema):
@@ -685,13 +686,18 @@ class IntelligentScrapingOrchestrator(BaseAgent):
         # Create instance statistics
         instance_stats = [self._create_instance_stats(operation_id, quality_metrics, processing_time)]
         
+        # Export data if requested
+        export_options = self._export_results(
+            items, metadata, quality_metrics, request.export_format, operation_id
+        )
+        
         return IntelligentScrapingOrchestratorOutputSchema(
             scraping_plan=planning_result.get("scraping_plan", "No plan available"),
             extracted_data=items,
             metadata=metadata,
             quality_score=quality_metrics.get("average_quality_score", 0.0),
             reasoning=planning_result.get("reasoning", "No reasoning available"),
-            export_options={request.export_format: f"./results/{operation_id}.{request.export_format}"},
+            export_options=export_options,
             monitoring_report=monitoring_report,
             instance_statistics=instance_stats
         )
@@ -940,3 +946,74 @@ class IntelligentScrapingOrchestrator(BaseAgent):
                 "average_quality_score": avg_quality
             }
         )
+    
+    def _export_results(
+        self, 
+        items: List[Dict[str, Any]], 
+        metadata: ScrapingMetadata, 
+        quality_metrics: Dict[str, Any],
+        export_format: str,
+        operation_id: str
+    ) -> Dict[str, str]:
+        """
+        Export scraping results using the ExportManager.
+        
+        Args:
+            items: Scraped data items
+            metadata: Scraping metadata
+            quality_metrics: Quality metrics
+            export_format: Requested export format
+            operation_id: Unique operation identifier
+            
+        Returns:
+            Dictionary mapping format to file path
+        """
+        try:
+            # Map string format to ExportFormat enum
+            format_mapping = {
+                "json": ExportFormat.JSON,
+                "csv": ExportFormat.CSV,
+                "markdown": ExportFormat.MARKDOWN,
+                "excel": ExportFormat.EXCEL
+            }
+            
+            export_format_enum = format_mapping.get(export_format.lower(), ExportFormat.JSON)
+            
+            # Create export configuration
+            config = ExportConfiguration(
+                format=export_format_enum,
+                output_directory="./exports",
+                filename_prefix=f"scraping_results_{operation_id}",
+                include_timestamp=True,
+                include_metadata=True,
+                overwrite_existing=True
+            )
+            
+            # Prepare export data
+            export_data = ExportData(
+                results=items,
+                metadata={
+                    "operation_id": operation_id,
+                    "target_url": metadata.url,
+                    "strategy_used": metadata.strategy_used,
+                    "items_extracted": metadata.items_extracted,
+                    "processing_time": metadata.processing_time,
+                    "timestamp": metadata.timestamp.isoformat(),
+                    "instance_id": metadata.instance_id
+                },
+                quality_metrics=quality_metrics
+            )
+            
+            # Export data
+            export_manager = ExportManager()
+            result = export_manager.export_data(export_data, config)
+            
+            if result.success:
+                return {export_format: result.file_path}
+            else:
+                # Return placeholder path if export fails
+                return {export_format: f"./exports/export_failed_{operation_id}.{export_format}"}
+                
+        except Exception as e:
+            # Return placeholder path if export fails
+            return {export_format: f"./exports/export_error_{operation_id}.{export_format}"}
