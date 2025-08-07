@@ -19,101 +19,15 @@ from atomic_agents.lib.components.system_prompt_generator import (
 from pydantic import Field, field_validator
 
 # Import from atomic_scraper_tool for base functionality
-# Note: In a real implementation, these would be proper imports
-# For this demonstration, we'll create compatible local implementations
-try:
-    from atomic_scraper_tool.models.base_models import ScrapingStrategy
-    from atomic_scraper_tool.models.schema_models import SchemaRecipe, FieldDefinition
-    from atomic_scraper_tool.analysis.website_analyzer import WebsiteAnalyzer, WebsiteStructureAnalysis
-    from atomic_scraper_tool.analysis.strategy_generator import StrategyGenerator, StrategyContext
-    from atomic_scraper_tool.analysis.schema_recipe_generator import SchemaRecipeGenerator, SchemaGenerationContext
-except ImportError:
-    # Create compatible local implementations for demonstration
-    from typing import Any, List, Dict, Optional
-    from pydantic import BaseModel
-    
-    class ScrapingStrategy(BaseModel):
-        scrape_type: str = "list"
-        target_selectors: List[str] = []
-        extraction_rules: Dict[str, Any] = {}
-        pagination_strategy: Optional[str] = None
-        max_pages: int = 1
-        request_delay: float = 1.0
-        metadata: Dict[str, Any] = {}
-    
-    class FieldDefinition(BaseModel):
-        field_type: str = "string"
-        description: str = ""
-        extraction_selector: str = ""
-        required: bool = False
-        quality_weight: float = 0.5
-        post_processing: List[str] = []
-        validation_rules: List[str] = []
-        educational_note: Optional[str] = None
-    
-    class SchemaRecipe(BaseModel):
-        name: str = ""
-        description: str = ""
-        fields: Dict[str, FieldDefinition] = {}
-        validation_rules: List[str] = []
-        quality_weights: Dict[str, float] = {}
-        version: str = "1.0"
-        metadata: Dict[str, Any] = {}
-    
-    class WebsiteStructureAnalysis(BaseModel):
-        url: str = ""
-        title: str = ""
-        content_patterns: List[Any] = []
-        metadata: Dict[str, Any] = {}
-    
-    class StrategyContext(BaseModel):
-        user_criteria: str = ""
-        target_content_type: str = "list"
-        quality_threshold: float = 50.0
-        max_results: int = 10
-        include_pagination: bool = True
-        extraction_depth: str = "medium"
-        orchestrator_requirements: Optional[Dict[str, Any]] = None
-    
-    class SchemaGenerationContext(BaseModel):
-        user_criteria: str = ""
-        target_content_type: str = "list"
-        sample_html: str = ""
-        quality_requirements: Dict[str, float] = {}
-        field_preferences: List[str] = []
-    
-    class WebsiteAnalyzer:
-        def analyze_website(self, html: str, url: str) -> WebsiteStructureAnalysis:
-            return WebsiteStructureAnalysis(url=url, title="Mock Analysis")
-    
-    class StrategyGenerator:
-        def generate_strategy(self, analysis: WebsiteStructureAnalysis, context: StrategyContext) -> ScrapingStrategy:
-            return ScrapingStrategy(
-                scrape_type=context.target_content_type,
-                target_selectors=[".item", ".product", "article"],
-                extraction_rules={"min_quality": context.quality_threshold},
-                max_pages=5,
-                request_delay=1.0,
-                metadata={}
-            )
-    
-    class SchemaRecipeGenerator:
-        def generate_schema_recipe(self, analysis: WebsiteStructureAnalysis, context: SchemaGenerationContext) -> SchemaRecipe:
-            return SchemaRecipe(
-                name="mock_schema",
-                description="Mock schema for testing",
-                fields={
-                    "title": FieldDefinition(
-                        field_type="string",
-                        description="Title field",
-                        extraction_selector="h1, h2",
-                        required=True,
-                        quality_weight=0.9
-                    )
-                },
-                validation_rules=["normalize_whitespace"],
-                quality_weights={"completeness": 0.4, "accuracy": 0.4, "consistency": 0.2}
-            )
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from atomic_scraper_tool.models.base_models import ScrapingStrategy
+from atomic_scraper_tool.models.schema_models import SchemaRecipe, FieldDefinition
+from atomic_scraper_tool.analysis.website_analyzer import WebsiteAnalyzer, WebsiteStructureAnalysis
+from atomic_scraper_tool.analysis.strategy_generator import StrategyGenerator, StrategyContext
+from atomic_scraper_tool.analysis.schema_recipe_generator import SchemaRecipeGenerator, SchemaGenerationContext
 
 
 class IntelligentPlanningAgentInputSchema(BaseIOSchema):
