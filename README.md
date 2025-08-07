@@ -2,18 +2,32 @@
 
 An advanced example application for the [Atomic Agents](../atomic-agents) framework that demonstrates sophisticated AI-powered web scraping orchestration with intelligent strategy planning, real-time monitoring, and production-ready patterns.
 
+This project serves as both a practical scraping solution and a comprehensive educational example showcasing how to build complex, multi-agent workflows using the Atomic Agents framework.
+
 ## Overview
 
-The Intelligent Web Scraper showcases how to build complex, multi-agent workflows using the Atomic Agents framework. It integrates our existing `atomic_scraper_tool` into the atomic-agents ecosystem, creating a comprehensive example that demonstrates:
+The Intelligent Web Scraper showcases how to build complex, multi-agent workflows using the Atomic Agents framework. It integrates our existing `atomic_scraper_tool` into the atomic-agents ecosystem, creating a comprehensive solution that demonstrates:
 
-- **Intelligent Agent Orchestration**: AI-powered coordination between multiple agents
-- **Dynamic Strategy Planning**: Automatic analysis and strategy generation for different websites
-- **Context Providers**: Dynamic context injection for enhanced agent capabilities
-- **Real-time Monitoring**: Comprehensive monitoring of scraper instances and operations
-- **Thread Management**: Proper concurrency control and resource management
-- **Production Patterns**: Error handling, logging, configuration management, and scalability
+- **🤖 Intelligent Agent Orchestration**: AI-powered coordination between multiple agents with natural language understanding
+- **🧠 Dynamic Strategy Planning**: Automatic website analysis and strategy generation with reasoning explanations
+- **🔄 Context Providers**: Dynamic context injection for enhanced agent capabilities and decision making
+- **📊 Real-time Monitoring**: Comprehensive monitoring of scraper instances with live dashboards and alerts
+- **⚡ Thread Management**: Proper concurrency control, resource management, and async coordination
+- **🛡️ Production Patterns**: Error handling, structured logging, configuration management, and horizontal scalability
+
+### Key Learning Objectives
+
+This example is designed to teach developers:
+
+1. **Advanced Agent Patterns**: How to build sophisticated multi-agent systems with proper coordination
+2. **Tool Integration**: Best practices for integrating complex tools into the Atomic Agents ecosystem
+3. **Context Management**: Dynamic context injection and provider patterns for enhanced agent capabilities
+4. **Production Readiness**: Implementing monitoring, error handling, and scalability patterns
+5. **Concurrency Control**: Thread-safe operations and async coordination in agent systems
 
 ## Architecture
+
+### High-Level System Architecture
 
 ```mermaid
 graph TB
@@ -38,9 +52,82 @@ graph TB
         ConfigContext[Configuration Context]
     end
     
+    subgraph "Monitoring & Management"
+        InstanceManager[Scraper Instance Manager]
+        MonitoringDashboard[Real-time Dashboard]
+        ConcurrencyManager[Concurrency Manager]
+    end
+    
     Orchestrator -.-> WebsiteContext
     Orchestrator -.-> ScrapingContext
     Orchestrator -.-> ConfigContext
+    Orchestrator --> InstanceManager
+    InstanceManager --> MonitoringDashboard
+    InstanceManager --> ConcurrencyManager
+```
+
+### Component Architecture Details
+
+#### 1. Intelligent Scraping Orchestrator
+The main coordination agent that:
+- Processes natural language scraping requests
+- Coordinates between planning agent and scraper tool
+- Manages context providers and dynamic context injection
+- Handles schema transformation and data flow
+- Provides monitoring and instance management
+
+#### 2. Atomic Scraper Planning Agent
+AI-powered planning component that:
+- Analyzes website structure and content patterns
+- Generates optimal scraping strategies with reasoning
+- Creates extraction schemas and validation rules
+- Provides confidence scoring for different approaches
+
+#### 3. Atomic Scraper Tool Integration
+Sophisticated scraping execution engine that:
+- Executes planned scraping strategies
+- Performs content extraction with quality analysis
+- Handles error recovery and retry logic
+- Manages rate limiting and compliance
+
+#### 4. Context Provider System
+Dynamic context injection framework featuring:
+- **Website Analysis Context**: Real-time website structure analysis
+- **Scraping Results Context**: Historical results and patterns
+- **Configuration Context**: Environment and system configuration
+
+#### 5. Monitoring & Instance Management
+Production-ready monitoring system with:
+- Real-time instance lifecycle management
+- Performance metrics and resource utilization tracking
+- Thread-safe concurrent operation management
+- Alert system with automated recommendations
+
+### Data Flow Architecture
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Orchestrator
+    participant ContextProviders
+    participant PlanningAgent
+    participant ScraperTool
+    participant InstanceManager
+    participant Monitor
+    
+    User->>Orchestrator: Natural Language Request
+    Orchestrator->>ContextProviders: Gather Dynamic Context
+    ContextProviders-->>Orchestrator: Website Analysis, Config, History
+    Orchestrator->>PlanningAgent: Enhanced Request + Context
+    PlanningAgent->>PlanningAgent: Analyze & Generate Strategy
+    PlanningAgent-->>Orchestrator: Scraping Plan + Reasoning
+    Orchestrator->>InstanceManager: Create/Assign Scraper Instance
+    InstanceManager->>ScraperTool: Execute Scraping Plan
+    ScraperTool->>Monitor: Report Progress & Metrics
+    ScraperTool-->>InstanceManager: Extraction Results
+    InstanceManager-->>Orchestrator: Processed Results + Metadata
+    Orchestrator->>Orchestrator: Format & Export Results
+    Orchestrator-->>User: Structured Output + Monitoring Report
 ```
 
 ## Features
@@ -77,11 +164,27 @@ graph TB
 
 ## Prerequisites
 
-- Python 3.11 or later
-- [Atomic Agents](../atomic-agents) framework installed
-- OpenAI API key (or other supported LLM provider)
+### System Requirements
+- **Python**: 3.11 or later (3.12 recommended for optimal performance)
+- **Memory**: Minimum 4GB RAM (8GB recommended for concurrent operations)
+- **Storage**: At least 1GB free space for dependencies and results
+- **Network**: Stable internet connection for LLM API calls and web scraping
+
+### Dependencies
+- **[Atomic Agents](../atomic-agents)**: Core framework (automatically installed)
+- **atomic_scraper_tool**: Integrated scraping engine (included as dependency)
+- **OpenAI API**: For LLM capabilities (or other supported providers)
+- **Poetry**: For dependency management and virtual environment
+
+### Supported LLM Providers
+- OpenAI (GPT-4, GPT-4o-mini, GPT-3.5-turbo)
+- Anthropic Claude (via atomic-agents)
+- Azure OpenAI
+- Local models via Ollama (experimental)
 
 ## Installation
+
+### Method 1: Standard Installation (Recommended)
 
 1. **Clone the repository** (if not already done):
    ```bash
@@ -89,21 +192,128 @@ graph TB
    cd atomic-agents/atomic-examples/intelligent-web-scraper
    ```
 
-2. **Install dependencies**:
+2. **Verify Poetry installation**:
    ```bash
+   poetry --version
+   # If not installed: curl -sSL https://install.python-poetry.org | python3 -
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   # Install all dependencies including dev tools
    poetry install
+   
+   # For production use only (smaller footprint):
+   poetry install --only=main
    ```
 
-3. **Set up environment variables**:
+4. **Set up environment variables**:
    ```bash
+   # Copy the example environment file
    cp .env.example .env
-   # Edit .env with your configuration
+   
+   # Edit with your preferred editor
+   nano .env  # or vim .env, code .env, etc.
    ```
 
-4. **Activate the environment**:
+5. **Configure your API keys** in `.env`:
+   ```bash
+   # Required: OpenAI API key
+   OPENAI_API_KEY=sk-your-openai-api-key-here
+   
+   # Optional: Other provider keys
+   ANTHROPIC_API_KEY=your-anthropic-key-here
+   AZURE_OPENAI_API_KEY=your-azure-key-here
+   ```
+
+6. **Activate the environment**:
    ```bash
    poetry shell
    ```
+
+7. **Verify installation**:
+   ```bash
+   # Test basic functionality
+   python -c "from intelligent_web_scraper import IntelligentScrapingOrchestrator; print('Installation successful!')"
+   
+   # Run a simple test
+   python -m pytest tests/test_basic_setup.py -v
+   ```
+
+### Method 2: Development Installation
+
+For contributors and developers who want to modify the code:
+
+1. **Follow steps 1-6 from Method 1**
+
+2. **Install development dependencies**:
+   ```bash
+   poetry install --with dev,test,docs
+   ```
+
+3. **Set up pre-commit hooks** (optional but recommended):
+   ```bash
+   poetry run pre-commit install
+   ```
+
+4. **Run the full test suite**:
+   ```bash
+   poetry run pytest --cov=intelligent_web_scraper
+   ```
+
+### Method 3: Docker Installation (Coming Soon)
+
+```bash
+# Build the Docker image
+docker build -t intelligent-web-scraper .
+
+# Run with environment variables
+docker run -e OPENAI_API_KEY=your-key-here intelligent-web-scraper
+```
+
+### Dependency Management
+
+The project uses Poetry for dependency management. Key dependencies include:
+
+```toml
+[tool.poetry.dependencies]
+python = "^3.11"
+atomic-agents = "^0.1.0"
+atomic-scraper-tool = "^1.0.0"
+rich = "^13.0.0"
+aiohttp = "^3.9.0"
+pydantic = "^2.5.0"
+```
+
+### Troubleshooting Installation
+
+**Issue**: Poetry not found
+```bash
+# Install Poetry
+curl -sSL https://install.python-poetry.org | python3 -
+# Add to PATH: export PATH="$HOME/.local/bin:$PATH"
+```
+
+**Issue**: Python version mismatch
+```bash
+# Check Python version
+python --version
+# Install Python 3.11+ using pyenv, conda, or system package manager
+```
+
+**Issue**: Dependency conflicts
+```bash
+# Clear Poetry cache and reinstall
+poetry cache clear pypi --all
+poetry install --no-cache
+```
+
+**Issue**: Permission errors
+```bash
+# Ensure proper permissions
+chmod +x scripts/*
+# Or run with appropriate permissions
+```
 
 ## Quick Start
 
@@ -395,31 +605,266 @@ This example demonstrates several advanced Atomic Agents concepts:
 
 ## Troubleshooting
 
-### Common Issues
+### Common Issues and Solutions
+
+#### Installation and Setup Issues
 
 **Issue**: "Module not found" errors
-**Solution**: Ensure you're in the poetry environment: `poetry shell`
+```bash
+# Solution: Ensure you're in the poetry environment
+poetry shell
+# Verify installation
+poetry show intelligent-web-scraper
+```
 
-**Issue**: API rate limiting
-**Solution**: Adjust `request_delay` and `max_concurrent_requests` in configuration
+**Issue**: Poetry installation fails
+```bash
+# Solution: Clear cache and reinstall
+poetry cache clear pypi --all
+rm poetry.lock
+poetry install
+```
 
-**Issue**: Memory usage high
-**Solution**: Reduce `max_instances` and `max_async_tasks` values
+**Issue**: Python version compatibility
+```bash
+# Solution: Check and upgrade Python version
+python --version  # Should be 3.11+
+# Use pyenv to manage Python versions
+pyenv install 3.12.0
+pyenv local 3.12.0
+```
+
+#### Runtime Issues
+
+**Issue**: API rate limiting errors
+```bash
+# Solution: Adjust rate limiting in .env
+REQUEST_DELAY=2.0
+MAX_CONCURRENT_REQUESTS=3
+ENABLE_RATE_LIMITING=true
+```
+
+**Issue**: Memory usage too high
+```bash
+# Solution: Reduce concurrent operations
+MAX_INSTANCES=3
+MAX_WORKERS=5
+MAX_ASYNC_TASKS=25
+```
 
 **Issue**: Monitoring dashboard not updating
-**Solution**: Check `enable_monitoring` is true and `monitoring_interval` is appropriate
+```bash
+# Solution: Check monitoring configuration
+ENABLE_MONITORING=true
+MONITORING_INTERVAL=1.0
+# Ensure Rich console is properly initialized
+```
 
-### Debug Mode
+**Issue**: Scraping fails with timeout errors
+```bash
+# Solution: Increase timeout values
+HTTP_TIMEOUT=30
+SCRAPING_TIMEOUT=60
+# Check network connectivity
+```
 
-Enable debug logging:
+#### Configuration Issues
+
+**Issue**: Environment variables not loaded
+```bash
+# Solution: Verify .env file location and format
+ls -la .env
+cat .env | grep -v "^#" | grep -v "^$"
+# Ensure no spaces around = in .env
+```
+
+**Issue**: Invalid API keys
+```bash
+# Solution: Verify API key format and permissions
+# OpenAI keys start with 'sk-'
+# Test API key manually:
+curl -H "Authorization: Bearer $OPENAI_API_KEY" \
+     https://api.openai.com/v1/models
+```
+
+#### Performance Issues
+
+**Issue**: Slow scraping performance
+```bash
+# Solution: Optimize configuration
+MAX_CONCURRENT_REQUESTS=8
+ENABLE_CACHING=true
+CACHE_TTL=3600
+# Use faster models for planning
+PLANNING_AGENT_MODEL=gpt-4o-mini
+```
+
+**Issue**: High CPU usage
+```bash
+# Solution: Reduce thread pool size
+MAX_WORKERS=4
+# Use async operations where possible
+PREFER_ASYNC=true
+```
+
+#### Scraping-Specific Issues
+
+**Issue**: Low quality scores
+```bash
+# Solution: Adjust quality threshold and improve prompts
+QUALITY_THRESHOLD=40.0
+# Use more sophisticated models
+ORCHESTRATOR_MODEL=gpt-4
+```
+
+**Issue**: Blocked by websites
+```bash
+# Solution: Respect robots.txt and add delays
+RESPECT_ROBOTS_TXT=true
+REQUEST_DELAY=3.0
+USER_AGENT="Mozilla/5.0 (compatible; IntelligentScraper/1.0)"
+```
+
+**Issue**: Export failures
+```bash
+# Solution: Check export directory permissions
+mkdir -p ./results
+chmod 755 ./results
+# Verify export format
+EXPORT_FORMAT=json  # or csv, markdown, excel
+```
+
+### Debug Mode and Logging
+
+#### Enable Debug Logging
 
 ```python
 import logging
-logging.basicConfig(level=logging.DEBUG)
+import sys
 
-config = IntelligentScrapingConfig(enable_monitoring=True)
-orchestrator = IntelligentScrapingOrchestrator(config=config)
+# Configure detailed logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('debug.log')
+    ]
+)
+
+# Enable specific component logging
+logging.getLogger('intelligent_web_scraper').setLevel(logging.DEBUG)
+logging.getLogger('atomic_scraper_tool').setLevel(logging.DEBUG)
 ```
+
+#### Environment-Specific Debug Settings
+
+```bash
+# Development environment
+DEBUG=true
+LOG_LEVEL=DEBUG
+ENABLE_VERBOSE_LOGGING=true
+
+# Production environment
+DEBUG=false
+LOG_LEVEL=INFO
+ENABLE_PERFORMANCE_LOGGING=true
+```
+
+#### Monitoring and Diagnostics
+
+```python
+# Enable comprehensive monitoring
+config = IntelligentScrapingConfig(
+    enable_monitoring=True,
+    monitoring_interval=0.5,
+    enable_performance_logging=True,
+    enable_resource_tracking=True
+)
+
+# Access diagnostic information
+orchestrator = IntelligentScrapingOrchestrator(config=config)
+diagnostics = await orchestrator.get_system_diagnostics()
+print(f"System Health: {diagnostics.overall_health}")
+print(f"Active Instances: {diagnostics.active_instances}")
+print(f"Memory Usage: {diagnostics.memory_usage_mb} MB")
+```
+
+### Performance Optimization
+
+#### Memory Optimization
+
+```bash
+# Reduce memory footprint
+MAX_INSTANCES=2
+MAX_ASYNC_TASKS=10
+ENABLE_RESULT_STREAMING=true
+CLEANUP_INTERVAL=300  # seconds
+```
+
+#### Network Optimization
+
+```bash
+# Optimize network usage
+CONNECTION_POOL_SIZE=10
+KEEP_ALIVE_TIMEOUT=30
+DNS_CACHE_TTL=300
+ENABLE_COMPRESSION=true
+```
+
+#### Concurrent Processing Optimization
+
+```python
+# Fine-tune concurrency settings
+config = IntelligentScrapingConfig(
+    max_concurrent_requests=min(8, os.cpu_count()),
+    max_workers=min(10, os.cpu_count() * 2),
+    max_async_tasks=50,
+    enable_load_balancing=True
+)
+```
+
+### Getting Help
+
+#### Self-Diagnosis Tools
+
+```bash
+# Run system diagnostics
+python -m intelligent_web_scraper.diagnostics
+
+# Test configuration
+python -m intelligent_web_scraper.config --test
+
+# Validate environment
+python -m intelligent_web_scraper.validate_env
+```
+
+#### Log Analysis
+
+```bash
+# Analyze error patterns
+grep -i error logs/scraper.log | tail -20
+
+# Check performance metrics
+grep -i "processing_time" logs/scraper.log | awk '{print $NF}' | sort -n
+```
+
+#### Community Support
+
+1. **Check Documentation**: Review the [docs/](docs/) directory
+2. **Search Issues**: Look through existing [GitHub issues](../../issues)
+3. **Create Detailed Issue**: Include:
+   - Python version and OS
+   - Complete error messages
+   - Configuration (sanitized)
+   - Steps to reproduce
+   - Expected vs actual behavior
+
+#### Professional Support
+
+For production deployments or complex issues:
+- Review the [Enterprise Support](docs/enterprise-support.md) options
+- Consider [Professional Services](docs/professional-services.md) for custom implementations
 
 ## License
 
