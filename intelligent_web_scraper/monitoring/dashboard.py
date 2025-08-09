@@ -28,6 +28,7 @@ from rich import box
 
 from .alerts import AlertManager, AlertLevel, Alert
 from .metrics import MetricsCollector, SystemMetrics, InstanceMetrics
+from .performance_monitor import PerformanceMonitor, PerformanceOptimizationReport
 
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,11 @@ class MonitoringDashboard:
         self.alert_manager = AlertManager(
             max_alerts=max_history,
             enable_sound=enable_sound_alerts
+        )
+        self.performance_monitor = PerformanceMonitor(
+            history_size=max_history,
+            benchmark_retention_days=7,
+            enable_detailed_tracking=True
         )
         
         # Dashboard state
@@ -129,6 +135,9 @@ class MonitoringDashboard:
         # Start alert processing
         self.alert_manager.start_processing()
         
+        # Start performance monitoring
+        self.performance_monitor.start_monitoring()
+        
         # Start dashboard display
         self._start_dashboard_display()
         
@@ -153,6 +162,7 @@ class MonitoringDashboard:
         # Stop components
         self.metrics_collector.stop_collection()
         self.alert_manager.stop_processing()
+        self.performance_monitor.stop_monitoring()
         
         logger.info("Monitoring dashboard stopped")
     

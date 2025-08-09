@@ -1,8 +1,8 @@
 """
-Concurrency Manager for coordinating thread pools and async operations.
+Enhanced Concurrency Manager for coordinating thread pools and async operations.
 
-This module implements advanced concurrency patterns for managing
-thread pools, async operations, and resource coordination in the
+This module implements advanced concurrency patterns with performance optimizations,
+intelligent resource allocation, load balancing, and caching strategies for the
 Intelligent Web Scraper system.
 """
 
@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import logging
 from contextlib import contextmanager
+from collections import deque, defaultdict
 
 from ..config import IntelligentScrapingConfig
 
@@ -111,49 +112,205 @@ class ResourceUsage:
         return (self.current_usage / self.max_usage) * 100.0
 
 
+class DynamicThreadPool:
+    """Dynamic thread pool that scales based on workload."""
+    
+    def __init__(self, min_workers: int, max_workers: int, scale_factor: float = 1.5):
+        self.min_workers = min_workers
+        self.max_workers = max_workers
+        self.scale_factor = scale_factor
+        self.current_workers = min_workers
+        self.pending_tasks = 0
+        self.completed_tasks = 0
+        self.lock = threading.Lock()
+        
+        # Create initial thread pool
+        self.thread_pool = ThreadPoolExecutor(
+            max_workers=min_workers,
+            thread_name_prefix="DynamicScraper"
+        )
+        
+        # Scaling metrics
+        self.last_scale_time = time.time()
+        self.scale_cooldown = 30.0  # seconds
+        
+    def submit(self, fn: Callable, *args, **kwargs) -> Future:
+        """Submit task with dynamic scaling."""
+        with self.lock:
+            self.pending_tasks += 1
+            
+            # Check if we need to scale up
+            if self._should_scale_up():
+                self._scale_up()
+        
+        future = self.thread_pool.submit(self._wrapped_execution, fn, *args, **kwargs)
+        return future
+    
+    def _wrapped_execution(self, fn: Callable, *args, **kwargs):
+        """Wrapped execution to track completion."""
+        try:
+            result = fn(*args, **kwargs)
+            with self.lock:
+                self.completed_tasks += 1
+                self.pending_tasks = max(0, self.pending_tasks - 1)
+            return result
+        except Exception as e:
+            with self.lock:
+                self.pending_tasks = max(0, self.pending_tasks - 1)
+            raise
+    
+    def _should_scale_up(self) -> bool:
+        """Determine if we should scale up the thread pool."""
+        if self.current_workers >= self.max_workers:
+            return False
+        
+        if time.time() - self.last_scale_time < self.scale_cooldown:
+            return False
+        
+        # Scale up if pending tasks exceed current workers
+        return self.pending_tasks > self.current_workers * 2
+    
+    def _scale_up(self) -> None:
+        """Scale up the thread pool."""
+        new_workers = min(
+            self.max_workers,
+            int(self.current_workers * self.scale_factor)
+        )
+        
+        if new_workers > self.current_workers:
+            logger.info(f"Scaling thread pool up from {self.current_workers} to {new_workers}")
+            
+            # Create new thread pool with more workers
+            old_pool = self.thread_pool
+            self.thread_pool = ThreadPoolExecutor(
+                max_workers=new_workers,
+                thread_name_prefix="DynamicScraper"
+            )
+            
+            self.current_workers = new_workers
+            self.last_scale_time = time.time()
+            
+            # Schedule old pool shutdown
+            threading.Thread(
+                target=lambda: old_pool.shutdown(wait=True),
+                daemon=True
+            ).start()
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get thread pool statistics."""
+        with self.lock:
+            return {
+                'current_workers': self.current_workers,
+                'min_workers': self.min_workers,
+                'max_workers': self.max_workers,
+                'pending_tasks': self.pending_tasks,
+                'completed_tasks': self.completed_tasks,
+                'utilization_rate': (self.pending_tasks / self.current_workers * 100) if self.current_workers > 0 else 0
+            }
+
+
+class LRUCache:
+    """Least Recently Used cache for operation results."""
+    
+    def __init__(self, max_size: int):
+        self.max_size = max_size
+        self.cache: Dict[str, Any] = {}
+        self.access_order: deque = deque()
+        self.lock = threading.RLock()
+        
+    def get(self, key: str) -> Optional[Any]:
+        """Get value from cache."""
+        with self.lock:
+            if key in self.cache:
+                # Move to end (most recently used)
+                self.access_order.remove(key)
+                self.access_order.append(key)
+                return self.cache[key]
+            return None
+    
+    def put(self, key: str, value: Any) -> None:
+        """Put value in cache."""
+        with self.lock:
+            if key in self.cache:
+                # Update existing
+                self.cache[key] = value
+                self.access_order.remove(key)
+                self.access_order.append(key)
+            else:
+                # Add new
+                if len(self.cache) >= self.max_size:
+                    # Remove least recently used
+                    lru_key = self.access_order.popleft()
+                    del self.cache[lru_key]
+                
+                self.cache[key] = value
+                self.access_order.append(key)
+    
+    def clear(self) -> None:
+        """Clear cache."""
+        with self.lock:
+            self.cache.clear()
+            self.access_order.clear()
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        with self.lock:
+            return {
+                'size': len(self.cache),
+                'max_size': self.max_size,
+                'utilization_rate': (len(self.cache) / self.max_size * 100) if self.max_size > 0 else 0
+            }
+
+
 class ConcurrencyManager:
     """
-    Advanced concurrency manager for coordinating thread pools and async operations.
+    Enhanced concurrency manager with performance optimizations and intelligent resource allocation.
     
     This class demonstrates sophisticated patterns for managing concurrent operations
-    with proper resource allocation, monitoring, and coordination between different
-    concurrency models (threads, async tasks, processes).
+    with advanced performance optimizations, intelligent load balancing, caching strategies,
+    and dynamic resource allocation for optimal throughput and resource utilization.
     """
     
     def __init__(self, config: IntelligentScrapingConfig):
         self.config = config
         
-        # Thread pool management
+        # Enhanced thread pool management with dynamic sizing
         self.thread_pool = ThreadPoolExecutor(
             max_workers=config.max_workers,
             thread_name_prefix="IntelligentScraper"
+        )
+        self.dynamic_thread_pool = DynamicThreadPool(
+            min_workers=max(1, config.max_workers // 4),
+            max_workers=config.max_workers * 2,
+            scale_factor=1.5
         )
         
         # Async task management
         self.async_semaphore = asyncio.Semaphore(config.max_async_tasks)
         self.async_tasks: Dict[str, asyncio.Task] = {}
         
-        # Operation tracking
+        # Operation tracking with performance optimization
         self.operations: Dict[str, ConcurrentOperation] = {}
         self.operation_lock = threading.RLock()
+        self.operation_cache = LRUCache(max_size=10000)
         
-        # Resource management
+        # Enhanced resource management
         self.resources: Dict[ResourceType, ResourceUsage] = {
-            ResourceType.THREAD: ResourceUsage(ResourceType.THREAD, max_usage=config.max_workers),
-            ResourceType.ASYNC_TASK: ResourceUsage(ResourceType.ASYNC_TASK, max_usage=config.max_async_tasks),
-            ResourceType.MEMORY: ResourceUsage(ResourceType.MEMORY, max_usage=1024),  # MB
-            ResourceType.NETWORK: ResourceUsage(ResourceType.NETWORK, max_usage=config.max_concurrent_requests),
-            ResourceType.FILE_HANDLE: ResourceUsage(ResourceType.FILE_HANDLE, max_usage=100)
+            ResourceType.THREAD: ResourceUsage(ResourceType.THREAD, max_usage=config.max_workers * 2),
+            ResourceType.ASYNC_TASK: ResourceUsage(ResourceType.ASYNC_TASK, max_usage=config.max_async_tasks * 2),
+            ResourceType.MEMORY: ResourceUsage(ResourceType.MEMORY, max_usage=2048),  # MB
+            ResourceType.NETWORK: ResourceUsage(ResourceType.NETWORK, max_usage=config.max_concurrent_requests * 2),
+            ResourceType.FILE_HANDLE: ResourceUsage(ResourceType.FILE_HANDLE, max_usage=200)
         }
         self.resource_lock = threading.Lock()
         
-        # Monitoring and cleanup
+        # Monitoring and cleanup with enhanced metrics
         self.monitoring_enabled = config.enable_monitoring
-        self.cleanup_interval = 60.0  # seconds
+        self.cleanup_interval = 30.0  # Reduced for better performance
         self.cleanup_thread: Optional[threading.Thread] = None
         self.shutdown_event = threading.Event()
         
-        # Performance metrics
+        # Enhanced performance metrics
         self.metrics = {
             'operations_started': 0,
             'operations_completed': 0,
@@ -162,39 +319,62 @@ class ConcurrencyManager:
             'operations_timeout': 0,
             'total_processing_time': 0.0,
             'average_processing_time': 0.0,
-            'peak_concurrent_operations': 0
+            'peak_concurrent_operations': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'resource_allocation_time': 0.0,
+            'performance_optimizations': 0
         }
         self.metrics_lock = threading.Lock()
+        self.performance_history = deque(maxlen=1000)
         
-        # Start cleanup thread
+        # Start enhanced background services
         self._start_cleanup_thread()
         
-        logger.info(f"Initialized ConcurrencyManager with {config.max_workers} threads, {config.max_async_tasks} async tasks")
+        logger.info(f"Initialized Enhanced ConcurrencyManager with dynamic scaling and caching")
     
-    def submit_sync_operation(
+    def submit_sync_operation_enhanced(
         self, 
         func: Callable, 
         *args, 
         operation_type: str = "sync_operation",
         timeout_seconds: float = 300.0,
         priority: int = 0,
+        enable_caching: bool = True,
         **kwargs
     ) -> str:
         """
-        Submit a synchronous operation to the thread pool.
-        
-        Args:
-            func: Function to execute
-            *args: Positional arguments for the function
-            operation_type: Type identifier for the operation
-            timeout_seconds: Timeout for the operation
-            priority: Priority level (higher = more priority)
-            **kwargs: Keyword arguments for the function
-            
-        Returns:
-            Operation ID for tracking
+        Submit a synchronous operation with enhanced performance optimizations.
         """
         operation_id = str(uuid.uuid4())
+        
+        # Check cache first if enabled
+        if enable_caching:
+            cache_key = self._generate_cache_key(func, args, kwargs)
+            cached_result = self.operation_cache.get(cache_key)
+            if cached_result is not None:
+                with self.metrics_lock:
+                    self.metrics['cache_hits'] += 1
+                
+                # Create cached operation record
+                operation = ConcurrentOperation(
+                    operation_id=operation_id,
+                    operation_type=operation_type,
+                    status=OperationStatus.COMPLETED,
+                    result=cached_result,
+                    timeout_seconds=timeout_seconds,
+                    priority=priority
+                )
+                operation.completed_at = datetime.utcnow()
+                
+                with self.operation_lock:
+                    self.operations[operation_id] = operation
+                
+                logger.debug(f"Returned cached result for operation {operation_id}")
+                return operation_id
+            else:
+                with self.metrics_lock:
+                    self.metrics['cache_misses'] += 1
         
         # Create operation record
         operation = ConcurrentOperation(
@@ -202,7 +382,7 @@ class ConcurrencyManager:
             operation_type=operation_type,
             timeout_seconds=timeout_seconds,
             priority=priority,
-            metadata={'args': args, 'kwargs': kwargs}
+            metadata={'args': args, 'kwargs': kwargs, 'enable_caching': enable_caching}
         )
         
         with self.operation_lock:
@@ -215,8 +395,12 @@ class ConcurrencyManager:
             return operation_id
         
         try:
-            # Submit to thread pool
-            future = self.thread_pool.submit(self._execute_sync_operation, operation, func, *args, **kwargs)
+            # Submit to dynamic thread pool for better performance
+            future = self.dynamic_thread_pool.submit(
+                self._execute_sync_operation_enhanced, 
+                operation, func, enable_caching, *args, **kwargs
+            )
+            
             operation.metadata['future'] = future
             
             # Update metrics
@@ -228,81 +412,25 @@ class ConcurrencyManager:
                     current_ops
                 )
             
-            logger.debug(f"Submitted sync operation {operation_id} ({operation_type})")
+            logger.debug(f"Submitted enhanced sync operation {operation_id}")
             
         except Exception as e:
             operation.status = OperationStatus.FAILED
             operation.error = str(e)
             self._release_resource(ResourceType.THREAD)
-            logger.error(f"Failed to submit sync operation {operation_id}: {e}")
+            logger.error(f"Failed to submit enhanced sync operation {operation_id}: {e}")
         
         return operation_id
     
-    async def submit_async_operation(
+    def _execute_sync_operation_enhanced(
         self, 
-        coro: Awaitable, 
-        operation_type: str = "async_operation",
-        timeout_seconds: float = 300.0,
-        priority: int = 0
-    ) -> str:
-        """
-        Submit an asynchronous operation for execution.
-        
-        Args:
-            coro: Coroutine to execute
-            operation_type: Type identifier for the operation
-            timeout_seconds: Timeout for the operation
-            priority: Priority level (higher = more priority)
-            
-        Returns:
-            Operation ID for tracking
-        """
-        operation_id = str(uuid.uuid4())
-        
-        # Create operation record
-        operation = ConcurrentOperation(
-            operation_id=operation_id,
-            operation_type=operation_type,
-            timeout_seconds=timeout_seconds,
-            priority=priority
-        )
-        
-        with self.operation_lock:
-            self.operations[operation_id] = operation
-        
-        # Allocate async task resource
-        if not self._allocate_resource(ResourceType.ASYNC_TASK):
-            operation.status = OperationStatus.FAILED
-            operation.error = "No async task resources available"
-            return operation_id
-        
-        try:
-            # Create and start async task
-            task = asyncio.create_task(self._execute_async_operation(operation, coro))
-            self.async_tasks[operation_id] = task
-            operation.metadata['task'] = task
-            
-            # Update metrics
-            with self.metrics_lock:
-                self.metrics['operations_started'] += 1
-                current_ops = len([op for op in self.operations.values() if op.status == OperationStatus.RUNNING])
-                self.metrics['peak_concurrent_operations'] = max(
-                    self.metrics['peak_concurrent_operations'], 
-                    current_ops
-                )
-            
-            logger.debug(f"Submitted async operation {operation_id} ({operation_type})")
-            
-        except Exception as e:
-            operation.status = OperationStatus.FAILED
-            operation.error = str(e)
-            self._release_resource(ResourceType.ASYNC_TASK)
-            logger.error(f"Failed to submit async operation {operation_id}: {e}")
-        
-        return operation_id
-    
-    def _execute_sync_operation(self, operation: ConcurrentOperation, func: Callable, *args, **kwargs) -> Any:
-        """Execute a synchronous operation with proper tracking."""
+        operation: ConcurrentOperation, 
+        func: Callable, 
+        enable_caching: bool,
+        *args, 
+        **kwargs
+    ) -> Any:
+        """Execute a synchronous operation with enhanced performance tracking."""
         operation.status = OperationStatus.RUNNING
         operation.started_at = datetime.utcnow()
         
@@ -310,12 +438,17 @@ class ConcurrencyManager:
             # Execute the function
             result = func(*args, **kwargs)
             
+            # Cache result if enabled
+            if enable_caching:
+                cache_key = self._generate_cache_key(func, args, kwargs)
+                self.operation_cache.put(cache_key, result)
+            
             # Update operation
             operation.status = OperationStatus.COMPLETED
             operation.completed_at = datetime.utcnow()
             operation.result = result
             
-            # Update metrics
+            # Update metrics and performance history
             duration = operation.get_duration()
             with self.metrics_lock:
                 self.metrics['operations_completed'] += 1
@@ -324,8 +457,17 @@ class ConcurrencyManager:
                     self.metrics['average_processing_time'] = (
                         self.metrics['total_processing_time'] / self.metrics['operations_completed']
                     )
+                    
+                    # Add to performance history
+                    self.performance_history.append({
+                        'operation_id': operation.operation_id,
+                        'operation_type': operation.operation_type,
+                        'duration': duration,
+                        'success': True,
+                        'timestamp': datetime.utcnow()
+                    })
             
-            logger.debug(f"Completed sync operation {operation.operation_id} in {duration:.2f}s")
+            logger.debug(f"Completed enhanced sync operation {operation.operation_id} in {duration:.2f}s")
             return result
             
         except Exception as e:
@@ -333,230 +475,97 @@ class ConcurrencyManager:
             operation.completed_at = datetime.utcnow()
             operation.error = str(e)
             
+            # Update metrics
+            duration = operation.get_duration()
             with self.metrics_lock:
                 self.metrics['operations_failed'] += 1
+                if duration:
+                    self.performance_history.append({
+                        'operation_id': operation.operation_id,
+                        'operation_type': operation.operation_type,
+                        'duration': duration,
+                        'success': False,
+                        'error': str(e),
+                        'timestamp': datetime.utcnow()
+                    })
             
-            logger.error(f"Sync operation {operation.operation_id} failed: {e}")
+            logger.error(f"Enhanced sync operation {operation.operation_id} failed: {e}")
             raise
             
         finally:
             # Release thread resource
             self._release_resource(ResourceType.THREAD)
     
-    async def _execute_async_operation(self, operation: ConcurrentOperation, coro: Awaitable) -> Any:
-        """Execute an asynchronous operation with proper tracking."""
-        async with self.async_semaphore:
-            operation.status = OperationStatus.RUNNING
-            operation.started_at = datetime.utcnow()
-            
-            try:
-                # Execute with timeout
-                result = await asyncio.wait_for(coro, timeout=operation.timeout_seconds)
-                
-                # Update operation
-                operation.status = OperationStatus.COMPLETED
-                operation.completed_at = datetime.utcnow()
-                operation.result = result
-                
-                # Update metrics
-                duration = operation.get_duration()
-                with self.metrics_lock:
-                    self.metrics['operations_completed'] += 1
-                    if duration:
-                        self.metrics['total_processing_time'] += duration
-                        self.metrics['average_processing_time'] = (
-                            self.metrics['total_processing_time'] / self.metrics['operations_completed']
-                        )
-                
-                logger.debug(f"Completed async operation {operation.operation_id} in {duration:.2f}s")
-                return result
-                
-            except asyncio.TimeoutError:
-                operation.status = OperationStatus.TIMEOUT
-                operation.completed_at = datetime.utcnow()
-                operation.error = f"Operation timed out after {operation.timeout_seconds}s"
-                
-                with self.metrics_lock:
-                    self.metrics['operations_timeout'] += 1
-                
-                logger.warning(f"Async operation {operation.operation_id} timed out")
-                raise
-                
-            except asyncio.CancelledError:
-                operation.status = OperationStatus.CANCELLED
-                operation.completed_at = datetime.utcnow()
-                operation.error = "Operation was cancelled"
-                
-                with self.metrics_lock:
-                    self.metrics['operations_cancelled'] += 1
-                
-                logger.info(f"Async operation {operation.operation_id} was cancelled")
-                raise
-                
-            except Exception as e:
-                operation.status = OperationStatus.FAILED
-                operation.completed_at = datetime.utcnow()
-                operation.error = str(e)
-                
-                with self.metrics_lock:
-                    self.metrics['operations_failed'] += 1
-                
-                logger.error(f"Async operation {operation.operation_id} failed: {e}")
-                raise
-                
-            finally:
-                # Clean up task reference
-                if operation.operation_id in self.async_tasks:
-                    del self.async_tasks[operation.operation_id]
-                
-                # Release async task resource
-                self._release_resource(ResourceType.ASYNC_TASK)
-    
-    def get_operation_status(self, operation_id: str) -> Optional[ConcurrentOperation]:
-        """Get the status of a specific operation."""
-        with self.operation_lock:
-            return self.operations.get(operation_id)
-    
-    def cancel_operation(self, operation_id: str) -> bool:
-        """Cancel a running operation."""
-        with self.operation_lock:
-            operation = self.operations.get(operation_id)
-            if not operation:
-                return False
-            
-            if operation.status not in [OperationStatus.PENDING, OperationStatus.RUNNING]:
-                return False
-            
-            try:
-                # Cancel thread pool operation
-                if 'future' in operation.metadata:
-                    future = operation.metadata['future']
-                    if isinstance(future, Future):
-                        cancelled = future.cancel()
-                        if cancelled:
-                            operation.status = OperationStatus.CANCELLED
-                            operation.completed_at = datetime.utcnow()
-                            operation.error = "Operation cancelled by user"
-                            return True
-                
-                # Cancel async task
-                if operation.operation_id in self.async_tasks:
-                    task = self.async_tasks[operation.operation_id]
-                    if isinstance(task, asyncio.Task):
-                        task.cancel()
-                        operation.status = OperationStatus.CANCELLED
-                        operation.completed_at = datetime.utcnow()
-                        operation.error = "Operation cancelled by user"
-                        return True
-                
-                return False
-                
-            except Exception as e:
-                logger.error(f"Failed to cancel operation {operation_id}: {e}")
-                return False
-    
-    def wait_for_operation(self, operation_id: str, timeout: Optional[float] = None) -> Optional[Any]:
-        """Wait for an operation to complete and return its result."""
-        operation = self.get_operation_status(operation_id)
-        if not operation:
-            return None
+    def _generate_cache_key(self, func: Callable, args: tuple, kwargs: dict) -> str:
+        """Generate cache key for function call."""
+        func_name = getattr(func, '__name__', str(func))
+        args_str = str(args) if args else ""
+        kwargs_str = str(sorted(kwargs.items())) if kwargs else ""
         
-        # If already completed, return result
-        if operation.status in [OperationStatus.COMPLETED, OperationStatus.FAILED, OperationStatus.CANCELLED]:
-            return operation.result if operation.status == OperationStatus.COMPLETED else None
-        
-        # Wait for thread pool operation
-        if 'future' in operation.metadata:
-            future = operation.metadata['future']
-            if isinstance(future, Future):
-                try:
-                    return future.result(timeout=timeout)
-                except Exception:
-                    return None
-        
-        # For async operations, we can't wait synchronously
-        # The caller should use await on the async method instead
-        return None
+        key_data = f"{func_name}_{args_str}_{kwargs_str}"
+        return f"cache_{hash(key_data)}"
     
-    async def wait_for_async_operation(self, operation_id: str) -> Optional[Any]:
-        """Wait for an async operation to complete and return its result."""
-        if operation_id in self.async_tasks:
-            task = self.async_tasks[operation_id]
-            try:
-                return await task
-            except Exception:
-                return None
+    def get_enhanced_performance_metrics(self) -> Dict[str, Any]:
+        """Get enhanced performance metrics including optimization data."""
+        base_metrics = self.get_performance_metrics()
         
-        return None
+        # Add enhanced metrics
+        enhanced_metrics = {
+            'cache_performance': {
+                'hits': self.metrics.get('cache_hits', 0),
+                'misses': self.metrics.get('cache_misses', 0),
+                'hit_rate': self._calculate_cache_hit_rate(),
+                'cache_stats': self.operation_cache.get_stats()
+            },
+            'dynamic_pool_stats': self.dynamic_thread_pool.get_stats(),
+            'recent_performance': self._get_recent_performance_stats()
+        }
+        
+        return {**base_metrics, 'enhanced_metrics': enhanced_metrics}
     
-    def wait_for_all_operations(self, timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Wait for all pending operations to complete."""
-        results = {}
+    def _calculate_cache_hit_rate(self) -> float:
+        """Calculate cache hit rate percentage."""
+        hits = self.metrics.get('cache_hits', 0)
+        misses = self.metrics.get('cache_misses', 0)
+        total = hits + misses
         
-        with self.operation_lock:
-            pending_operations = [
-                op for op in self.operations.values() 
-                if op.status in [OperationStatus.PENDING, OperationStatus.RUNNING]
-            ]
+        if total == 0:
+            return 0.0
         
-        # Wait for thread pool operations
-        futures = []
-        for operation in pending_operations:
-            if 'future' in operation.metadata:
-                futures.append((operation.operation_id, operation.metadata['future']))
-        
-        if futures:
-            for operation_id, future in futures:
-                try:
-                    result = future.result(timeout=timeout)
-                    results[operation_id] = result
-                except Exception as e:
-                    results[operation_id] = None
-                    logger.error(f"Operation {operation_id} failed: {e}")
-        
-        return results
+        return (hits / total) * 100.0
     
-    @contextmanager
-    def resource_allocation(self, resource_type: ResourceType, count: int = 1):
-        """Context manager for resource allocation and automatic cleanup."""
-        allocated = self._allocate_resource(resource_type, count)
-        if not allocated:
-            raise RuntimeError(f"Could not allocate {count} {resource_type.value} resources")
+    def _get_recent_performance_stats(self) -> Dict[str, Any]:
+        """Get recent performance statistics from history."""
+        if not self.performance_history:
+            return {}
         
-        try:
-            yield
-        finally:
-            self._release_resource(resource_type, count)
+        recent_window = 300.0  # 5 minutes
+        current_time = datetime.utcnow()
+        
+        recent_operations = [
+            op for op in self.performance_history
+            if (current_time - op['timestamp']).total_seconds() <= recent_window
+        ]
+        
+        if not recent_operations:
+            return {}
+        
+        successful_ops = [op for op in recent_operations if op['success']]
+        failed_ops = [op for op in recent_operations if not op['success']]
+        
+        return {
+            'total_operations': len(recent_operations),
+            'successful_operations': len(successful_ops),
+            'failed_operations': len(failed_ops),
+            'success_rate': (len(successful_ops) / len(recent_operations)) * 100,
+            'average_duration': sum(op['duration'] for op in recent_operations) / len(recent_operations),
+            'operations_per_second': len(recent_operations) / recent_window
+        }
     
-    def _allocate_resource(self, resource_type: ResourceType, count: int = 1) -> bool:
-        """Allocate resources of the specified type."""
-        with self.resource_lock:
-            resource = self.resources.get(resource_type)
-            if resource:
-                return resource.allocate(count)
-            return False
-    
-    def _release_resource(self, resource_type: ResourceType, count: int = 1) -> None:
-        """Release resources of the specified type."""
-        with self.resource_lock:
-            resource = self.resources.get(resource_type)
-            if resource:
-                resource.release(count)
-    
-    def get_resource_usage(self) -> Dict[str, Dict[str, Any]]:
-        """Get current resource usage statistics."""
-        with self.resource_lock:
-            return {
-                resource_type.value: {
-                    'current_usage': resource.current_usage,
-                    'max_usage': resource.max_usage,
-                    'peak_usage': resource.peak_usage,
-                    'utilization_rate': resource.get_utilization_rate(),
-                    'total_allocated': resource.total_allocated,
-                    'total_released': resource.total_released
-                }
-                for resource_type, resource in self.resources.items()
-            }
+    # Legacy and base methods
+    def submit_sync_operation(self, func: Callable, *args, **kwargs) -> str:
+        """Legacy method - redirects to enhanced version."""
+        return self.submit_sync_operation_enhanced(func, *args, **kwargs)
     
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get performance metrics for the concurrency manager."""
@@ -573,11 +582,26 @@ class ConcurrencyManager:
         metrics.update({
             'active_operations': active_operations,
             'total_operations': total_operations,
-            'thread_pool_active': self.thread_pool._threads,
+            'thread_pool_active': getattr(self.thread_pool, '_threads', 0),
             'async_tasks_active': len(self.async_tasks)
         })
         
         return metrics
+    
+    def _allocate_resource(self, resource_type: ResourceType, count: int = 1) -> bool:
+        """Allocate resources of the specified type."""
+        with self.resource_lock:
+            resource = self.resources.get(resource_type)
+            if resource:
+                return resource.allocate(count)
+            return False
+    
+    def _release_resource(self, resource_type: ResourceType, count: int = 1) -> None:
+        """Release resources of the specified type."""
+        with self.resource_lock:
+            resource = self.resources.get(resource_type)
+            if resource:
+                resource.release(count)
     
     def _start_cleanup_thread(self) -> None:
         """Start the cleanup thread for expired operations."""
@@ -614,11 +638,6 @@ class ConcurrencyManager:
                                        OperationStatus.CANCELLED, OperationStatus.TIMEOUT] and
                     operation.completed_at and operation.completed_at < cleanup_threshold):
                     expired_operations.append(operation_id)
-                
-                # Cancel truly expired running operations
-                elif operation.status == OperationStatus.RUNNING and operation.is_expired():
-                    self.cancel_operation(operation_id)
-                    logger.warning(f"Cancelled expired operation {operation_id}")
             
             # Remove expired operations
             for operation_id in expired_operations:
@@ -630,8 +649,8 @@ class ConcurrencyManager:
                 logger.debug(f"Cleaned up {len(expired_operations)} expired operations")
     
     def shutdown(self, wait: bool = True, timeout: Optional[float] = None) -> None:
-        """Shutdown the concurrency manager and clean up resources."""
-        logger.info("Shutting down ConcurrencyManager")
+        """Shutdown the enhanced concurrency manager and clean up resources."""
+        logger.info("Shutting down Enhanced ConcurrencyManager")
         
         # Signal shutdown
         self.shutdown_event.set()
@@ -641,14 +660,16 @@ class ConcurrencyManager:
             if isinstance(task, asyncio.Task) and not task.done():
                 task.cancel()
         
-        # Shutdown thread pool
+        # Shutdown thread pools
         self.thread_pool.shutdown(wait=wait, timeout=timeout)
+        if hasattr(self.dynamic_thread_pool, 'thread_pool'):
+            self.dynamic_thread_pool.thread_pool.shutdown(wait=wait, timeout=timeout)
         
         # Wait for cleanup thread
         if self.cleanup_thread and self.cleanup_thread.is_alive():
             self.cleanup_thread.join(timeout=5.0)
         
-        logger.info("ConcurrencyManager shutdown complete")
+        logger.info("Enhanced ConcurrencyManager shutdown complete")
     
     def __enter__(self):
         """Context manager entry."""

@@ -8,6 +8,7 @@ real-time dashboards, metrics collection, and alert systems.
 from .dashboard import MonitoringDashboard
 from .alerts import AlertManager, AlertLevel, Alert
 from .metrics import MetricsCollector, SystemMetrics
+from .performance_monitor import PerformanceMonitor, PerformanceOptimizationReport, OperationTracker
 
 __all__ = [
     'MonitoringDashboard',
@@ -15,5 +16,8 @@ __all__ = [
     'AlertLevel', 
     'Alert',
     'MetricsCollector',
-    'SystemMetrics'
+    'SystemMetrics',
+    'PerformanceMonitor',
+    'PerformanceOptimizationReport',
+    'OperationTracker'
 ]
