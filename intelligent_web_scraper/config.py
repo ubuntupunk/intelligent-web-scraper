@@ -6,7 +6,7 @@ applications, including environment variable handling and validation.
 """
 
 import os
-from typing import Optional
+from typing import Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field, validator
 
 
@@ -116,6 +116,87 @@ class IntelligentScrapingConfig(BaseModel):
     planning_agent_model: str = Field(
         default="gpt-4o-mini", 
         description="Model for planning agent"
+    )
+    
+    # LLM Provider configuration
+    llm_provider: Literal["openai", "gemini", "deepseek", "openrouter", "anthropic"] = Field(
+        default="openai",
+        description="LLM provider to use for AI models"
+    )
+    
+    # Provider-specific API configurations
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key"
+    )
+    openai_base_url: Optional[str] = Field(
+        default=None,
+        description="OpenAI API base URL (for custom endpoints)"
+    )
+    
+    gemini_api_key: Optional[str] = Field(
+        default=None,
+        description="Google Gemini API key"
+    )
+    
+    deepseek_api_key: Optional[str] = Field(
+        default=None,
+        description="DeepSeek API key"
+    )
+    deepseek_base_url: Optional[str] = Field(
+        default="https://api.deepseek.com/v1",
+        description="DeepSeek API base URL"
+    )
+    
+    openrouter_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenRouter API key"
+    )
+    openrouter_base_url: Optional[str] = Field(
+        default="https://openrouter.ai/api/v1",
+        description="OpenRouter API base URL"
+    )
+    
+    anthropic_api_key: Optional[str] = Field(
+        default=None,
+        description="Anthropic API key"
+    )
+    
+    # Model mapping for different providers
+    provider_model_mapping: Dict[str, Dict[str, str]] = Field(
+        default_factory=lambda: {
+            "openai": {
+                "gpt-4o-mini": "gpt-4o-mini",
+                "gpt-4o": "gpt-4o", 
+                "gpt-4": "gpt-4",
+                "gpt-3.5-turbo": "gpt-3.5-turbo"
+            },
+            "gemini": {
+                "gpt-4o-mini": "gemini-1.5-flash",
+                "gpt-4o": "gemini-1.5-pro",
+                "gpt-4": "gemini-1.5-pro",
+                "gpt-3.5-turbo": "gemini-1.5-flash"
+            },
+            "deepseek": {
+                "gpt-4o-mini": "deepseek-chat",
+                "gpt-4o": "deepseek-chat",
+                "gpt-4": "deepseek-chat",
+                "gpt-3.5-turbo": "deepseek-chat"
+            },
+            "openrouter": {
+                "gpt-4o-mini": "openai/gpt-4o-mini",
+                "gpt-4o": "openai/gpt-4o",
+                "gpt-4": "openai/gpt-4",
+                "gpt-3.5-turbo": "openai/gpt-3.5-turbo"
+            },
+            "anthropic": {
+                "gpt-4o-mini": "claude-3-haiku-20240307",
+                "gpt-4o": "claude-3-5-sonnet-20241022",
+                "gpt-4": "claude-3-5-sonnet-20241022",
+                "gpt-3.5-turbo": "claude-3-haiku-20240307"
+            }
+        },
+        description="Mapping of generic model names to provider-specific model names"
     )
     
     # Scraping configuration
@@ -233,6 +314,60 @@ class IntelligentScrapingConfig(BaseModel):
             raise ValueError('Max async tasks must be positive')
         return v
     
+    @validator('orchestrator_model', 'planning_agent_model')
+    def validate_model_names(cls, v, values):
+        """Validate that model names are supported by the selected provider."""
+        provider = values.get('llm_provider', 'openai')
+        model_mapping = values.get('provider_model_mapping', {})
+        
+        if provider in model_mapping and v not in model_mapping[provider]:
+            available_models = list(model_mapping[provider].keys())
+            raise ValueError(f'Model "{v}" not supported by provider "{provider}". Available models: {available_models}')
+        
+        return v
+    
+    def get_provider_model_name(self, generic_model: str) -> str:
+        """Get the provider-specific model name for a generic model name."""
+        if self.llm_provider in self.provider_model_mapping:
+            return self.provider_model_mapping[self.llm_provider].get(generic_model, generic_model)
+        return generic_model
+    
+    def get_provider_config(self) -> Dict[str, Any]:
+        """Get the configuration for the selected LLM provider."""
+        config = {
+            "provider": self.llm_provider,
+            "orchestrator_model": self.get_provider_model_name(self.orchestrator_model),
+            "planning_agent_model": self.get_provider_model_name(self.planning_agent_model)
+        }
+        
+        if self.llm_provider == "openai":
+            config.update({
+                "api_key": self.openai_api_key or os.getenv("OPENAI_API_KEY"),
+                "base_url": self.openai_base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            })
+        elif self.llm_provider == "gemini":
+            config.update({
+                "api_key": self.gemini_api_key or os.getenv("GEMINI_API_KEY"),
+                "base_url": "https://generativelanguage.googleapis.com/v1beta"
+            })
+        elif self.llm_provider == "deepseek":
+            config.update({
+                "api_key": self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY"),
+                "base_url": self.deepseek_base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+            })
+        elif self.llm_provider == "openrouter":
+            config.update({
+                "api_key": self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY"),
+                "base_url": self.openrouter_base_url or os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+            })
+        elif self.llm_provider == "anthropic":
+            config.update({
+                "api_key": self.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY"),
+                "base_url": "https://api.anthropic.com"
+            })
+        
+        return config
+    
     @classmethod
     def from_env(cls) -> "IntelligentScrapingConfig":
         """
@@ -304,4 +439,15 @@ class IntelligentScrapingConfig(BaseModel):
             max_instances=int(os.getenv("MAX_INSTANCES", "5")),
             max_workers=int(os.getenv("MAX_WORKERS", "10")),
             max_async_tasks=int(os.getenv("MAX_ASYNC_TASKS", "50")),
+            
+            # LLM Provider configuration
+            llm_provider=os.getenv("LLM_PROVIDER", "openai"),
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+            openai_base_url=os.getenv("OPENAI_BASE_URL"),
+            gemini_api_key=os.getenv("GEMINI_API_KEY"),
+            deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
+            deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL"),
+            openrouter_api_key=os.getenv("OPENROUTER_API_KEY"),
+            openrouter_base_url=os.getenv("OPENROUTER_BASE_URL"),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         )

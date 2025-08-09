@@ -28,6 +28,15 @@ pandas = "^2.0.0"
 openpyxl = "^3.1.0"
 instructor = "^1.9.0"
 
+# Optional LLM provider dependencies
+google-generativeai = {version = "^0.8.0", optional = true}
+anthropic = {version = "^0.34.0", optional = true}
+
+[tool.poetry.extras]
+gemini = ["google-generativeai"]
+anthropic = ["anthropic"]
+all-providers = ["google-generativeai", "anthropic"]
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
 pytest-asyncio = "^0.21.0"
