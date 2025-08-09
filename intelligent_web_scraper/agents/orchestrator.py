@@ -8,6 +8,8 @@ atomic-agents patterns for coordinating complex multi-agent workflows.
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
+import time
+import logging
 
 from atomic_agents.agents.base_agent import BaseAgent, BaseAgentConfig
 from atomic_agents.lib.base.base_io_schema import BaseIOSchema
@@ -18,6 +20,8 @@ from openai import OpenAI
 
 from ..config import IntelligentScrapingConfig
 from ..export import ExportManager, ExportFormat, ExportConfiguration, ExportData
+
+logger = logging.getLogger(__name__)
 
 
 class IntelligentScrapingOrchestratorInputSchema(BaseIOSchema):
@@ -599,23 +603,34 @@ class IntelligentScrapingOrchestrator(BaseAgent):
         error handling in multi-component workflows.
         """
         try:
-            # Import the scraper tool (would be injected in production)
-            from atomic_scraper_tool.tools.atomic_scraper_tool import AtomicScraperTool
-            from atomic_scraper_tool.config.scraper_config import AtomicScraperConfig
+            # Import the scraper tool and schema
+            from ..tools.atomic_scraper_tool import AtomicScraperTool, AtomicScraperInputSchema, AtomicScraperToolConfig
             
-            # Create scraper tool with configuration
-            scraper_config = AtomicScraperConfig(
+            # Create scraper tool configuration
+            scraper_config = AtomicScraperToolConfig.from_intelligent_config(
                 base_url=scraper_input["target_url"],
-                min_quality_score=self.config.default_quality_threshold,
-                max_retries=3,
-                request_delay=self.config.request_delay if hasattr(self.config, 'request_delay') else 1.0,
-                respect_robots_txt=self.config.respect_robots_txt,
-                enable_rate_limiting=self.config.enable_rate_limiting
+                intelligent_config=self.config,
+                instance_id=f"orchestrator_{int(time.time())}"
             )
-            scraper_tool = AtomicScraperTool(scraper_config)
+            
+            # Create scraper tool
+            scraper_tool = AtomicScraperTool(
+                config=scraper_config,
+                intelligent_config=self.config
+            )
+            
+            # Create proper input schema object with dictionaries (not objects)
+            scraper_input_schema = AtomicScraperInputSchema(
+                target_url=scraper_input["target_url"],
+                strategy=scraper_input.get("strategy", {}),
+                schema_recipe=scraper_input.get("schema_recipe", {}),
+                max_results=scraper_input.get("max_results", 10),
+                quality_threshold=scraper_input.get("quality_threshold", self.config.default_quality_threshold),
+                enable_monitoring=scraper_input.get("enable_monitoring", True)
+            )
             
             # Execute scraping operation
-            scraping_result = scraper_tool.run(scraper_input)
+            scraping_result = scraper_tool.run(scraper_input_schema)
             
             return {
                 "results": scraping_result.results,
@@ -624,13 +639,17 @@ class IntelligentScrapingOrchestrator(BaseAgent):
             }
             
         except Exception as e:
+            import traceback
+            logger.error(f"Scraper tool coordination failed: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
             # Return error result with proper structure
             return {
                 "results": {
                     "items": [],
                     "total_found": 0,
                     "total_scraped": 0,
-                    "strategy_used": scraper_input.get("strategy", {}),
+                    "strategy_used": scraper_input.get("strategy", "fallback"),
                     "errors": [f"Scraper tool coordination failed: {str(e)}"]
                 },
                 "summary": f"Scraping failed due to coordination error: {str(e)}",

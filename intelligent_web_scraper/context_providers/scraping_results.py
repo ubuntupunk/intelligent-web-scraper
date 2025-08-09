@@ -414,6 +414,50 @@ class ScrapingResultsContextProvider(SystemPromptContextProviderBase):
         # Clear cache
         self._clear_context_cache()
     
+    def set_results(self, items: List[Dict[str, Any]], quality_scores: List[float]) -> None:
+        """
+        Set scraping results with quality scores.
+        
+        Args:
+            items: List of scraped items as dictionaries
+            quality_scores: List of quality scores corresponding to items
+        """
+        self.results.clear()
+        
+        # Convert items to ScrapedItem objects
+        for i, item in enumerate(items):
+            quality_score = quality_scores[i] if i < len(quality_scores) else 0.0
+            scraped_item = ScrapedItem(
+                data=item,
+                quality_score=quality_score,
+                source_url=getattr(self.current_session, 'target_url', '')
+            )
+            self.results.append(scraped_item)
+            
+            # Update quality metrics
+            self.quality_metrics.update_quality_score(quality_score)
+            self.extraction_statistics.add_quality_score(quality_score)
+            
+            # Add to current session if exists
+            if self.current_session:
+                self.current_session.add_item(scraped_item)
+        
+        # Clear cache to force refresh
+        self._clear_context_cache()
+    
+    def set_operation_metadata(self, metadata: Dict[str, Any]) -> None:
+        """
+        Set operation metadata for the current session.
+        
+        Args:
+            metadata: Metadata dictionary to set
+        """
+        if self.current_session:
+            self.current_session.metadata.update(metadata)
+        
+        # Clear cache
+        self._clear_context_cache()
+    
     def get_info(self) -> str:
         """
         Return formatted scraping results information for agent context.
