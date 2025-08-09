@@ -1,4 +1,4 @@
-f"""
+"""
 Main entry point for the Intelligent Web Scraper application.
 
 This module provides the interactive command-line interface and demonstrates
@@ -605,8 +605,13 @@ class IntelligentScrapingApp:
                 self.console.print(f"[dim]... and {remaining} more items (see export files for complete data)[/dim]")
 
 
-async def main() -> None:
-    """Main entry point for the application."""
+def main() -> None:
+    """Main entry point for the CLI application."""
+    asyncio.run(async_main())
+
+
+async def async_main() -> None:
+    """Async main entry point for the application."""
     try:
         # Load configuration from environment
         config = IntelligentScrapingConfig.from_env()
@@ -623,4 +628,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

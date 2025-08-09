@@ -1,0 +1,286 @@
+# Docker Compose configuration for Intelligent Web Scraper
+# Provides development and production deployment options
+
+version: '3.8'
+
+services:
+  # Main application service
+  intelligent-web-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VERSION: ${VERSION:-0.1.0}
+        VCS_REF: ${VCS_REF:-}
+    image: intelligent-web-scraper:${VERSION:-latest}
+    container_name: intelligent-web-scraper
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      # Core configuration
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      
+      # Model configuration
+      - ORCHESTRATOR_MODEL=${ORCHESTRATOR_MODEL:-gpt-4o-mini}
+      - PLANNING_AGENT_MODEL=${PLANNING_AGENT_MODEL:-gpt-4o-mini}
+      
+      # Scraping configuration
+      - DEFAULT_QUALITY_THRESHOLD=${DEFAULT_QUALITY_THRESHOLD:-50.0}
+      - MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS:-5}
+      - REQUEST_DELAY=${REQUEST_DELAY:-1.0}
+      
+      # Output configuration
+      - EXPORT_FORMAT=${EXPORT_FORMAT:-json}
+      - RESULTS_DIRECTORY=/app/results
+      
+      # Compliance configuration
+      - RESPECT_ROBOTS_TXT=${RESPECT_ROBOTS_TXT:-true}
+      - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-true}
+      
+      # Monitoring configuration
+      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
+      - MONITORING_INTERVAL=${MONITORING_INTERVAL:-1.0}
+      
+      # Concurrency configuration
+      - MAX_INSTANCES=${MAX_INSTANCES:-5}
+      - MAX_WORKERS=${MAX_WORKERS:-10}
+      - MAX_ASYNC_TASKS=${MAX_ASYNC_TASKS:-50}
+      
+      # Logging configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-text}
+    
+    # Volume mounts
+    volumes:
+      - ./results:/app/results
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - ./data:/app/data
+    
+    # Port mapping (if running as web service)
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-2.0}'
+          memory: ${MEMORY_LIMIT:-4G}
+        reservations:
+          cpus: '${CPU_RESERVATION:-0.5}'
+          memory: ${MEMORY_RESERVATION:-1G}
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import intelligent_web_scraper; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Interactive mode for development
+    stdin_open: true
+    tty: true
+    
+    # Dependency on monitoring services
+    depends_on:
+      - prometheus
+      - grafana
+    
+    # Networks
+    networks:
+      - scraper-network
+
+  # Prometheus monitoring service
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    restart: unless-stopped
+    
+    # Command line arguments
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    
+    # Port mapping
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    
+    # Volume mounts
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert.rules:/etc/prometheus/alert.rules:ro
+      - prometheus-data:/prometheus
+    
+    # Networks
+    networks:
+      - scraper-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana visualization service
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: grafana
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    
+    # Port mapping
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    
+    # Volume mounts
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    
+    # Networks
+    networks:
+      - scraper-network
+    
+    # Dependencies
+    depends_on:
+      - prometheus
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis cache service (optional)
+  redis:
+    image: redis:7.0-alpine
+    container_name: redis
+    restart: unless-stopped
+    
+    # Command line arguments
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-scraper123}
+    
+    # Port mapping
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    
+    # Volume mounts
+    volumes:
+      - redis-data:/data
+    
+    # Networks
+    networks:
+      - scraper-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL database service (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-scraper}
+      - POSTGRES_USER=${POSTGRES_USER:-scraper}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-scraper123}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    
+    # Port mapping
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    
+    # Volume mounts
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    
+    # Networks
+    networks:
+      - scraper-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scraper}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: nginx
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    
+    # Volume mounts
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    
+    # Networks
+    networks:
+      - scraper-network
+    
+    # Dependencies
+    depends_on:
+      - intelligent-web-scraper
+      - grafana
+      - prometheus
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Named volumes for persistent data
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+
+# Custom network for service communication
+networks:
+  scraper-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

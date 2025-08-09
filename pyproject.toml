@@ -37,6 +37,10 @@ isort = "^5.12.0"
 flake8 = "^6.0.0"
 mypy = "^1.5.0"
 
+[tool.poetry.scripts]
+intelligent-web-scraper = "intelligent_web_scraper.cli:main"
+iws = "intelligent_web_scraper.cli:main"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

@@ -25,6 +25,12 @@ from .context_providers import (
     ScrapingResultsContextProvider,
     ConfigurationContextProvider,
 )
+from .ecosystem import (
+    TOOL_METADATA,
+    get_tool_info,
+    get_agent_factory,
+    validate_ecosystem_compatibility
+)
 
 __all__ = [
     "IntelligentScrapingOrchestrator",
@@ -32,4 +38,8 @@ __all__ = [
     "WebsiteAnalysisContextProvider",
     "ScrapingResultsContextProvider",
     "ConfigurationContextProvider",
+    "TOOL_METADATA",
+    "get_tool_info",
+    "get_agent_factory", 
+    "validate_ecosystem_compatibility"
 ]

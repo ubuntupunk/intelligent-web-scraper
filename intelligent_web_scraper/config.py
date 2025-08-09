@@ -7,7 +7,7 @@ applications, including environment variable handling and validation.
 
 import os
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class IntelligentScrapingConfig(BaseModel):
@@ -176,6 +176,63 @@ class IntelligentScrapingConfig(BaseModel):
         description="Maximum number of concurrent async tasks"
     )
     
+    @validator('default_quality_threshold')
+    def validate_quality_threshold(cls, v):
+        """Validate quality threshold is between 0 and 100."""
+        if not 0 <= v <= 100:
+            raise ValueError('Quality threshold must be between 0 and 100')
+        return v
+    
+    @validator('max_concurrent_requests')
+    def validate_max_concurrent_requests(cls, v):
+        """Validate max concurrent requests is positive."""
+        if v <= 0:
+            raise ValueError('Max concurrent requests must be positive')
+        return v
+    
+    @validator('request_delay')
+    def validate_request_delay(cls, v):
+        """Validate request delay is non-negative."""
+        if v < 0:
+            raise ValueError('Request delay must be non-negative')
+        return v
+    
+    @validator('default_export_format')
+    def validate_export_format(cls, v):
+        """Validate export format is supported."""
+        valid_formats = {'json', 'csv', 'markdown', 'excel'}
+        if v not in valid_formats:
+            raise ValueError(f'Export format must be one of: {valid_formats}')
+        return v
+    
+    @validator('monitoring_interval')
+    def validate_monitoring_interval(cls, v):
+        """Validate monitoring interval is positive."""
+        if v <= 0:
+            raise ValueError('Monitoring interval must be positive')
+        return v
+    
+    @validator('max_instances')
+    def validate_max_instances(cls, v):
+        """Validate max instances is positive."""
+        if v <= 0:
+            raise ValueError('Max instances must be positive')
+        return v
+    
+    @validator('max_workers')
+    def validate_max_workers(cls, v):
+        """Validate max workers is positive."""
+        if v <= 0:
+            raise ValueError('Max workers must be positive')
+        return v
+    
+    @validator('max_async_tasks')
+    def validate_max_async_tasks(cls, v):
+        """Validate max async tasks is positive."""
+        if v <= 0:
+            raise ValueError('Max async tasks must be positive')
+        return v
+    
     @classmethod
     def from_env(cls) -> "IntelligentScrapingConfig":
         """
@@ -188,7 +245,7 @@ class IntelligentScrapingConfig(BaseModel):
         Environment Variables:
             ORCHESTRATOR_MODEL: LLM model for orchestrator agent
             PLANNING_AGENT_MODEL: LLM model for planning agent
-            QUALITY_THRESHOLD: Default quality threshold (0-100)
+            DEFAULT_QUALITY_THRESHOLD: Default quality threshold (0-100)
             MAX_CONCURRENT_REQUESTS: Maximum concurrent HTTP requests
             REQUEST_DELAY: Delay between requests in seconds
             EXPORT_FORMAT: Default export format (json, csv, markdown, excel)
@@ -215,7 +272,7 @@ class IntelligentScrapingConfig(BaseModel):
             ```bash
             # Set environment variables
             export ORCHESTRATOR_MODEL="gpt-4"
-            export QUALITY_THRESHOLD="75.0"
+            export DEFAULT_QUALITY_THRESHOLD="75.0"
             export MAX_CONCURRENT_REQUESTS="8"
             export ENABLE_MONITORING="true"
             ```
@@ -235,14 +292,14 @@ class IntelligentScrapingConfig(BaseModel):
         return cls(
             orchestrator_model=os.getenv("ORCHESTRATOR_MODEL", "gpt-4o-mini"),
             planning_agent_model=os.getenv("PLANNING_AGENT_MODEL", "gpt-4o-mini"),
-            default_quality_threshold=float(os.getenv("QUALITY_THRESHOLD", "50.0")),
+            default_quality_threshold=float(os.getenv("DEFAULT_QUALITY_THRESHOLD", "50.0")),
             max_concurrent_requests=int(os.getenv("MAX_CONCURRENT_REQUESTS", "5")),
             request_delay=float(os.getenv("REQUEST_DELAY", "1.0")),
             default_export_format=os.getenv("EXPORT_FORMAT", "json"),
             results_directory=os.getenv("RESULTS_DIRECTORY", "./results"),
-            respect_robots_txt=os.getenv("RESPECT_ROBOTS_TXT", "true").lower() == "true",
-            enable_rate_limiting=os.getenv("ENABLE_RATE_LIMITING", "true").lower() == "true",
-            enable_monitoring=os.getenv("ENABLE_MONITORING", "true").lower() == "true",
+            respect_robots_txt=os.getenv("RESPECT_ROBOTS_TXT", "true").lower() in ("true", "1", "yes", "on"),
+            enable_rate_limiting=os.getenv("ENABLE_RATE_LIMITING", "true").lower() in ("true", "1", "yes", "on"),
+            enable_monitoring=os.getenv("ENABLE_MONITORING", "true").lower() in ("true", "1", "yes", "on"),
             monitoring_interval=float(os.getenv("MONITORING_INTERVAL", "1.0")),
             max_instances=int(os.getenv("MAX_INSTANCES", "5")),
             max_workers=int(os.getenv("MAX_WORKERS", "10")),
