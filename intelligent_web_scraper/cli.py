@@ -25,7 +25,7 @@ def create_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
     parser = argparse.ArgumentParser(
         prog="intelligent-web-scraper",
-        description="Intelligent Web Scraper - An Advanced Atomic Agents Example",
+        description="Intelligent Web Scraper - Nuclear-Powered AI Web Scraping Platform",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

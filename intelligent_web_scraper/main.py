@@ -56,17 +56,17 @@ class IntelligentScrapingApp:
         # Create main welcome text
         welcome_text = Text()
         welcome_text.append("🤖 Intelligent Web Scraper\n", style="bold blue")
-        welcome_text.append("An Advanced Atomic Agents Example\n\n", style="italic cyan")
-        welcome_text.append("This application demonstrates sophisticated AI-powered web scraping\n")
-        welcome_text.append("orchestration using the Atomic Agents framework.\n\n")
+        welcome_text.append("Nuclear-Powered AI Web Scraping Platform\n\n", style="italic cyan")
+        welcome_text.append("Reactor-ready intelligent web scraping with AI orchestration,\n")
+        welcome_text.append("batch processing, and reactor-grade monitoring.\n\n")
         
         # Features section
         welcome_text.append("✨ Key Features:\n", style="bold yellow")
         welcome_text.append("• Natural language scraping requests\n", style="green")
-        welcome_text.append("• Intelligent strategy planning\n", style="green") 
+        welcome_text.append("• Nuclear-powered strategy planning\n", style="green") 
         welcome_text.append("• Real-time monitoring & progress tracking\n", style="green")
         welcome_text.append("• Multiple export formats (JSON, CSV, Excel, Markdown)\n", style="green")
-        welcome_text.append("• Production-ready patterns & error handling\n", style="green")
+        welcome_text.append("• Reactor-ready patterns & error handling\n", style="green")
         
         # Create welcome panel
         welcome_panel = Panel(

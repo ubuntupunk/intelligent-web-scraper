@@ -40,7 +40,7 @@ TOOL_METADATA = AtomicAgentsToolMetadata(
         "ai-orchestration", 
         "data-extraction",
         "atomic-agents-example",
-        "production-ready",
+        "reactor-ready",
         "monitoring",
         "concurrent-processing"
     ],
