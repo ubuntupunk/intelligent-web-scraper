@@ -372,5 +372,117 @@ class TestIntelligentScrapingConfig:
         assert config.request_delay == 2.0
 
 
+class TestModelConfiguration:
+    """Test model configuration and validation."""
+    
+    def test_supported_models(self):
+        """Test that supported models can be configured."""
+        supported_models = [
+            "gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo",
+            "gemini-1.5-flash", "gemini-1.5-pro",
+            "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022",
+            "deepseek-chat"
+        ]
+        
+        for model in supported_models:
+            # Test orchestrator model
+            config = IntelligentScrapingConfig(orchestrator_model=model)
+            assert config.orchestrator_model == model
+            
+            # Test planning agent model
+            config = IntelligentScrapingConfig(planning_agent_model=model)
+            assert config.planning_agent_model == model
+    
+    def test_model_configuration_combinations(self):
+        """Test different model combinations."""
+        # Test same model for both agents
+        config = IntelligentScrapingConfig(
+            orchestrator_model="gpt-4o",
+            planning_agent_model="gpt-4o"
+        )
+        assert config.orchestrator_model == "gpt-4o"
+        assert config.planning_agent_model == "gpt-4o"
+        
+        # Test different models for each agent
+        config = IntelligentScrapingConfig(
+            orchestrator_model="gpt-4o-mini",
+            planning_agent_model="gpt-4"
+        )
+        assert config.orchestrator_model == "gpt-4o-mini"
+        assert config.planning_agent_model == "gpt-4"
+        
+        # Test cross-provider combinations
+        config = IntelligentScrapingConfig(
+            orchestrator_model="claude-3-5-sonnet-20241022",
+            planning_agent_model="gemini-1.5-pro"
+        )
+        assert config.orchestrator_model == "claude-3-5-sonnet-20241022"
+        assert config.planning_agent_model == "gemini-1.5-pro"
+    
+    def test_llm_provider_configuration(self):
+        """Test LLM provider configuration."""
+        supported_providers = ["openai", "gemini", "anthropic", "deepseek", "openrouter"]
+        
+        for provider in supported_providers:
+            config = IntelligentScrapingConfig(llm_provider=provider)
+            assert config.llm_provider == provider
+    
+    def test_provider_model_mapping(self):
+        """Test that provider model mapping is properly configured."""
+        config = IntelligentScrapingConfig()
+        
+        # Test that provider model mapping exists
+        assert hasattr(config, 'provider_model_mapping')
+        assert isinstance(config.provider_model_mapping, dict)
+        
+        # Test that all supported providers are in the mapping
+        expected_providers = ["openai", "gemini", "deepseek", "openrouter", "anthropic"]
+        for provider in expected_providers:
+            assert provider in config.provider_model_mapping
+            assert isinstance(config.provider_model_mapping[provider], dict)
+    
+    def test_model_environment_variable_loading(self):
+        """Test loading model configuration from environment variables."""
+        with patch.dict(os.environ, {
+            'ORCHESTRATOR_MODEL': 'gpt-4o',
+            'PLANNING_AGENT_MODEL': 'claude-3-5-sonnet-20241022',
+            'LLM_PROVIDER': 'anthropic'
+        }):
+            config = IntelligentScrapingConfig.from_env()
+            
+            assert config.orchestrator_model == "gpt-4o"
+            assert config.planning_agent_model == "claude-3-5-sonnet-20241022"
+            assert config.llm_provider == "anthropic"
+    
+    def test_model_configuration_persistence(self):
+        """Test that model configuration persists through serialization."""
+        original_config = IntelligentScrapingConfig(
+            orchestrator_model="gpt-4o",
+            planning_agent_model="claude-3-5-sonnet-20241022",
+            llm_provider="anthropic"
+        )
+        
+        # Serialize and deserialize
+        config_dict = original_config.model_dump()
+        restored_config = IntelligentScrapingConfig(**config_dict)
+        
+        assert restored_config.orchestrator_model == "gpt-4o"
+        assert restored_config.planning_agent_model == "claude-3-5-sonnet-20241022"
+        assert restored_config.llm_provider == "anthropic"
+    
+    def test_default_model_configuration(self):
+        """Test default model configuration values."""
+        config = IntelligentScrapingConfig()
+        
+        # Test defaults
+        assert config.orchestrator_model == "gpt-4o-mini"
+        assert config.planning_agent_model == "gpt-4o-mini"
+        assert config.llm_provider == "openai"
+        
+        # Test that defaults are reasonable for production use
+        assert config.orchestrator_model in ["gpt-4o-mini", "gpt-4o", "gpt-4"]
+        assert config.planning_agent_model in ["gpt-4o-mini", "gpt-4o", "gpt-4"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
