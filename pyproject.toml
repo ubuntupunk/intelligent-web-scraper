@@ -1,9 +1,26 @@
 [tool.poetry]
 name = "intelligent-web-scraper"
 version = "0.1.0"
-description = "An advanced example application for the Atomic Agents framework that demonstrates intelligent web scraping orchestration with AI-powered strategy planning"
+description = "Nuclear-powered AI web scraping platform with intelligent orchestration, batch processing, and reactor-grade monitoring built on the Atomic Agents framework"
 authors = ["Atomic Agents Team"]
+license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/atomic-agents/intelligent-web-scraper"
+repository = "https://github.com/atomic-agents/intelligent-web-scraper"
+documentation = "https://github.com/atomic-agents/intelligent-web-scraper#readme"
+keywords = ["web-scraping", "ai", "atomic-agents", "orchestration", "batch-processing", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 packages = [{include = "intelligent_web_scraper"}]
 
 [tool.poetry.dependencies]
