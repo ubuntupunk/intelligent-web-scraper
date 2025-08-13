@@ -233,7 +233,7 @@ class ScrapingMaestro:
 - [ ] Update package name and structure
 - [ ] Rebrand core classes and methods
 - [ ] Update CLI commands and help text
-- [ ] Create new visual identity assets
+- [ ] Create new visual identity asets
 - [ ] Update documentation with new branding
 
 ### Phase 2: Experience (Week 3-4)
