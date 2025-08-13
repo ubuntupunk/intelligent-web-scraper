@@ -315,6 +315,50 @@ class IntelligentScrapingApp:
         self.console.print("\n[bold yellow]Configuration Modification[/bold yellow]")
         self.console.print("[dim]Leave empty to keep current value[/dim]\n")
         
+        # AI Model Configuration
+        self.console.print("[bold blue]🤖 AI Model Configuration[/bold blue]")
+        self.console.print("[dim]Note: Ensure your API keys are configured for the selected provider[/dim]\n")
+        
+        # Available models
+        available_models = [
+            "gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-3.5-turbo",
+            "gemini-1.5-flash", "gemini-1.5-pro", 
+            "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022",
+            "deepseek-chat"
+        ]
+        
+        # Orchestrator model
+        new_orchestrator_model = Prompt.ask(
+            f"[cyan]Orchestrator model[/cyan] [dim](current: {self.config.orchestrator_model})[/dim]",
+            choices=available_models + [""],
+            default=""
+        )
+        if new_orchestrator_model:
+            self.config.orchestrator_model = new_orchestrator_model
+            self.console.print(f"[green]✓ Orchestrator model updated to {new_orchestrator_model}[/green]")
+        
+        # Planning agent model
+        new_planning_model = Prompt.ask(
+            f"[cyan]Planning agent model[/cyan] [dim](current: {self.config.planning_agent_model})[/dim]",
+            choices=available_models + [""],
+            default=""
+        )
+        if new_planning_model:
+            self.config.planning_agent_model = new_planning_model
+            self.console.print(f"[green]✓ Planning agent model updated to {new_planning_model}[/green]")
+        
+        # LLM Provider
+        new_provider = Prompt.ask(
+            f"[cyan]LLM provider[/cyan] [dim](current: {self.config.llm_provider})[/dim]",
+            choices=["openai", "gemini", "anthropic", "deepseek", "openrouter", ""],
+            default=""
+        )
+        if new_provider:
+            self.config.llm_provider = new_provider
+            self.console.print(f"[green]✓ LLM provider updated to {new_provider}[/green]")
+        
+        self.console.print("\n[bold blue]🎯 Scraping Configuration[/bold blue]")
+        
         # Quality threshold
         new_threshold = Prompt.ask(
             f"[cyan]Quality threshold (0-100)[/cyan] [dim](current: {self.config.default_quality_threshold})[/dim]",
@@ -340,6 +384,22 @@ class IntelligentScrapingApp:
             except ValueError:
                 self.console.print("[red]Invalid number[/red]")
         
+        # Request delay
+        new_delay = Prompt.ask(
+            f"[cyan]Request delay (seconds)[/cyan] [dim](current: {self.config.request_delay})[/dim]",
+            default=""
+        )
+        if new_delay:
+            try:
+                value = float(new_delay)
+                if value >= 0:
+                    self.config.request_delay = value
+                    self.console.print(f"[green]✓ Request delay updated to {value}s[/green]")
+            except ValueError:
+                self.console.print("[red]Invalid number[/red]")
+        
+        self.console.print("\n[bold blue]💾 Output Configuration[/bold blue]")
+        
         # Export format
         new_format = Prompt.ask(
             f"[cyan]Export format[/cyan] [dim](current: {self.config.default_export_format})[/dim]",
@@ -358,6 +418,32 @@ class IntelligentScrapingApp:
         if new_dir:
             self.config.results_directory = new_dir
             self.console.print(f"[green]✓ Results directory updated to {new_dir}[/green]")
+        
+        self.console.print("\n[bold blue]📊 Monitoring Configuration[/bold blue]")
+        
+        # Enable monitoring
+        new_monitoring = Prompt.ask(
+            f"[cyan]Enable monitoring (true/false)[/cyan] [dim](current: {self.config.enable_monitoring})[/dim]",
+            choices=["true", "false", ""],
+            default=""
+        )
+        if new_monitoring:
+            self.config.enable_monitoring = new_monitoring.lower() == "true"
+            self.console.print(f"[green]✓ Monitoring updated to {self.config.enable_monitoring}[/green]")
+        
+        # Monitoring interval
+        new_interval = Prompt.ask(
+            f"[cyan]Monitoring interval (seconds)[/cyan] [dim](current: {self.config.monitoring_interval})[/dim]",
+            default=""
+        )
+        if new_interval:
+            try:
+                value = float(new_interval)
+                if value > 0:
+                    self.config.monitoring_interval = value
+                    self.console.print(f"[green]✓ Monitoring interval updated to {value}s[/green]")
+            except ValueError:
+                self.console.print("[red]Invalid number[/red]")
         
         self.console.print("\n[green]Configuration updated successfully![/green]")
     
