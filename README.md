@@ -36,6 +36,13 @@ The AI will:
 ### Prerequisites
 - Python 3.11 or higher
 - Poetry (for dependency management)
+- OpenAI API key (for AI-powered features)
+
+### Key Dependencies
+This project builds upon several powerful tools:
+- **atomic-agents**: Provides the AI agent framework and orchestration patterns
+- **atomic-scraper-tool**: Handles the actual web scraping with advanced quality analysis
+- **OpenAI API**: Powers the intelligent planning and natural language understanding
 
 ### Installation
 
@@ -252,12 +259,14 @@ Options:
 
 ### Key Components
 
-1. **Intelligent Orchestrator**: Coordinates all scraping operations using AI
-2. **Planning Agent**: Analyzes websites and generates extraction strategies
-3. **Scraper Tool**: Executes scraping with error recovery and quality control
-4. **Context Providers**: Supply dynamic context for enhanced AI decision-making
+1. **Intelligent Orchestrator** (atomic-agents): Coordinates all scraping operations using AI
+2. **Planning Agent** (atomic-agents): Analyzes websites and generates extraction strategies  
+3. **Scraper Tool** (atomic-scraper-tool): Executes scraping with error recovery and quality control
+4. **Context Providers** (atomic-agents): Supply dynamic context for enhanced AI decision-making
 5. **Performance Monitor**: Tracks metrics and provides real-time feedback
 6. **Export Manager**: Handles multiple output formats and file management
+
+> **Note**: This project integrates the `atomic-scraper-tool` into the `atomic-agents` framework, creating a comprehensive AI-powered scraping solution that combines the best of both tools.
 
 ## 🧪 Testing
 
@@ -319,11 +328,28 @@ intelligent-web-scraper/
 5. Submit a pull request
 
 ### Built With
-- **[Atomic Agents](https://github.com/atomic-agents/atomic-agents)**: AI agent framework
-- **[OpenAI GPT](https://openai.com/)**: Language model for intelligence
-- **[Rich](https://github.com/Textualize/rich)**: Beautiful terminal interfaces
-- **[Pydantic](https://pydantic.dev/)**: Data validation and settings
-- **[Poetry](https://python-poetry.org/)**: Dependency management
+
+#### Core Dependencies
+- **[Atomic Agents](https://github.com/atomic-agents/atomic-agents)**: AI agent framework for orchestration and coordination
+- **[Atomic Scraper Tool](../atomic_scraper_tool)**: Advanced web scraping engine with quality analysis
+- **[OpenAI GPT](https://openai.com/)**: Language models for intelligent planning and analysis
+- **[Rich](https://github.com/Textualize/rich)**: Beautiful terminal interfaces and progress tracking
+
+#### Data Processing & Export
+- **[Pydantic](https://pydantic.dev/)**: Data validation, serialization, and configuration management
+- **[Pandas](https://pandas.pydata.org/)**: Data manipulation and CSV export
+- **[OpenPyXL](https://openpyxl.readthedocs.io/)**: Excel file generation and formatting
+- **[BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/)**: HTML parsing and content extraction
+
+#### Web & Network
+- **[aiohttp](https://docs.aiohttp.org/)**: Async HTTP client for concurrent requests
+- **[Requests](https://requests.readthedocs.io/)**: HTTP library for web requests
+- **[lxml](https://lxml.de/)**: Fast XML and HTML processing
+
+#### Development & Deployment
+- **[Poetry](https://python-poetry.org/)**: Dependency management and packaging
+- **[python-dotenv](https://github.com/theskumar/python-dotenv)**: Environment variable management
+- **[psutil](https://github.com/giampaolo/psutil)**: System and process monitoring
 
 ## 📈 Performance
 
