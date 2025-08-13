@@ -151,6 +151,58 @@ class IntelligentScrapingApp:
         except ValueError:
             return False, 0
     
+    def get_batch_urls(self) -> list[str]:
+        """Get multiple URLs for batch processing."""
+        urls = []
+        self.console.print("[dim]Enter URLs one by one. Press Enter with empty input to finish.[/dim]")
+        
+        while True:
+            try:
+                url_input = Prompt.ask(
+                    f"[cyan]URL #{len(urls) + 1}[/cyan] [dim](or press Enter to finish)[/dim]",
+                    default=""
+                )
+                
+                if not url_input.strip():
+                    break
+                
+                # Handle special commands
+                if url_input.lower() == 'help':
+                    self.display_detailed_help()
+                    continue
+                elif url_input.lower() == 'config':
+                    self.display_configuration()
+                    continue
+                elif url_input.lower() == 'stats':
+                    self.display_session_stats()
+                    continue
+                
+                # Validate URL
+                if self.validate_url(url_input):
+                    urls.append(url_input)
+                    self.console.print(f"[green]✓ Added: {url_input}[/green]")
+                else:
+                    self.console.print("[red]❌ Invalid URL format. Please include http:// or https://[/red]")
+                
+            except KeyboardInterrupt:
+                if Confirm.ask("[yellow]Cancel batch URL entry?[/yellow]"):
+                    return []
+                continue
+        
+        if not urls:
+            self.console.print("[yellow]No URLs entered.[/yellow]")
+            return []
+        
+        # Display summary
+        self.console.print(f"\n[bold green]📋 Batch Summary: {len(urls)} URLs added[/bold green]")
+        for i, url in enumerate(urls, 1):
+            self.console.print(f"  {i}. {url}")
+        
+        if not Confirm.ask(f"\n[cyan]Proceed with these {len(urls)} URLs?[/cyan]"):
+            return []
+        
+        return urls
+    
     def get_validated_input(self, prompt_text: str, validator_func, error_message: str, default_value=None):
         """Get validated input from user with retry logic."""
         while True:
@@ -464,19 +516,30 @@ class IntelligentScrapingApp:
             try:
                 self.console.print()  # Add spacing
                 
-                # Get scraping request
+                # Get target URL(s) first - supports batch processing
+                self.console.print("[bold blue]🌐 Target URL Configuration[/bold blue]")
+                
+                # Ask if user wants single or batch processing
+                batch_mode = Confirm.ask("[cyan]Do you want to scrape multiple URLs in batch?[/cyan]")
+                
+                if batch_mode:
+                    target_urls = self.get_batch_urls()
+                    if not target_urls:
+                        continue
+                else:
+                    single_url = self.get_validated_input(
+                        "[bold cyan]🌐 Enter the target URL[/bold cyan] [dim](must include http:// or https://)[/dim]",
+                        self.validate_url,
+                        "Please enter a valid URL (e.g., https://example.com)"
+                    )
+                    target_urls = [single_url]
+                
+                # Get scraping request after URLs are specified
                 scraping_request = self.get_validated_input(
-                    "[bold cyan]📝 Enter your scraping request[/bold cyan]",
+                    "[bold cyan]📝 Enter your scraping request[/bold cyan] [dim](will be applied to all URLs)[/dim]",
                     lambda x: len(x.strip()) > 0,
                     "Please enter a valid scraping request.",
                     "Extract all product information from this page"
-                )
-                
-                # Get target URL with validation
-                target_url = self.get_validated_input(
-                    "[bold cyan]🌐 Enter the target URL[/bold cyan] [dim](must include http:// or https://)[/dim]",
-                    self.validate_url,
-                    "Please enter a valid URL (e.g., https://example.com)"
                 )
                 
                 # Get optional parameters with validation
@@ -507,77 +570,107 @@ class IntelligentScrapingApp:
                 summary_table.add_column("Value", style="green")
                 
                 summary_table.add_row("Request:", scraping_request[:80] + "..." if len(scraping_request) > 80 else scraping_request)
-                summary_table.add_row("URL:", target_url)
+                summary_table.add_row("URLs:", f"{len(target_urls)} URL(s)" if len(target_urls) > 1 else target_urls[0])
                 summary_table.add_row("Max Results:", str(max_results))
                 summary_table.add_row("Quality Threshold:", f"{quality_threshold}%")
                 summary_table.add_row("Export Format:", export_format.upper())
                 
                 self.console.print(summary_table)
                 
-                if not Confirm.ask("\n[bold cyan]Proceed with this scraping request?[/bold cyan]"):
+                if not Confirm.ask(f"\n[bold cyan]Proceed with scraping {len(target_urls)} URL(s)?[/bold cyan]"):
                     continue
                 
-                # Prepare request data
-                request_data = {
-                    "scraping_request": scraping_request,
-                    "target_url": target_url,
-                    "max_results": max_results,
-                    "quality_threshold": quality_threshold,
-                    "export_format": export_format,
-                    "enable_monitoring": self.config.enable_monitoring
-                }
-                
                 # Update session stats
-                self.session_stats["total_requests"] += 1
+                self.session_stats["total_requests"] += len(target_urls)
                 
-                # Execute scraping with enhanced progress display
-                self.console.print(Rule("[bold yellow]🔄 Processing Request[/bold yellow]"))
+                # Execute scraping for each URL
+                all_results = []
+                successful_urls = 0
+                failed_urls = 0
                 
-                try:
-                    with Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        console=self.console,
-                        transient=False
-                    ) as progress:
+                self.console.print(Rule(f"[bold yellow]🔄 Processing {len(target_urls)} URL(s)[/bold yellow]"))
+                
+                for i, target_url in enumerate(target_urls, 1):
+                    try:
+                        self.console.print(f"\n[bold blue]Processing URL {i}/{len(target_urls)}:[/bold blue] {target_url}")
                         
-                        # Add progress tasks
-                        task = progress.add_task("Starting intelligent scraping...", total=None)
-                        await asyncio.sleep(0.5)  # Brief pause for UX
+                        # Prepare request data for this URL
+                        request_data = {
+                            "scraping_request": scraping_request,
+                            "target_url": target_url,
+                            "max_results": max_results,
+                            "quality_threshold": quality_threshold,
+                            "export_format": export_format,
+                            "enable_monitoring": self.config.enable_monitoring,
+                            "batch_index": i,
+                            "batch_total": len(target_urls)
+                        }
                         
-                        progress.update(task, description="Analyzing website structure...")
-                        await asyncio.sleep(0.5)
+                        with Progress(
+                            SpinnerColumn(),
+                            TextColumn("[progress.description]{task.description}"),
+                            console=self.console,
+                            transient=False
+                        ) as progress:
+                            
+                            # Add progress tasks
+                            task = progress.add_task(f"Processing URL {i}/{len(target_urls)}...", total=None)
+                            await asyncio.sleep(0.3)
+                            
+                            progress.update(task, description=f"Analyzing {target_url}...")
+                            await asyncio.sleep(0.3)
+                            
+                            progress.update(task, description="Planning scraping strategy...")
+                            await asyncio.sleep(0.3)
+                            
+                            progress.update(task, description="Extracting data...")
+                            result = await self.orchestrator.run(request_data)
+                            
+                            progress.update(task, description=f"URL {i} complete!")
                         
-                        progress.update(task, description="Planning scraping strategy...")
-                        await asyncio.sleep(0.5)
+                        # Store result with URL info
+                        result.source_url = target_url
+                        result.batch_index = i
+                        all_results.append(result)
+                        successful_urls += 1
                         
-                        progress.update(task, description="Processing during scraping...")
-                        result = await self.orchestrator.run(request_data)
+                        # Update success stats
+                        if hasattr(result, 'extracted_data') and result.extracted_data:
+                            self.session_stats["total_items_extracted"] += len(result.extracted_data)
                         
-                        progress.update(task, description="Scraping complete!")
-                    
-                    # Update success stats
-                    self.session_stats["successful_requests"] += 1
-                    if hasattr(result, 'extracted_data') and result.extracted_data:
-                        self.session_stats["total_items_extracted"] += len(result.extracted_data)
-                    
-                    # Display results
-                    self.display_results(result)
-                    
-                except Exception as e:
-                    # Update failure stats
-                    self.session_stats["failed_requests"] += 1
-                    
-                    self.console.print(f"\n[red]❌ Scraping failed: {str(e)}[/red]")
-                    
-                    # Offer detailed error information
-                    if Confirm.ask("[cyan]Would you like to see detailed error information?[/cyan]"):
-                        error_panel = Panel(
-                            str(e),
-                            title="🔍 Error Details",
-                            border_style="red"
-                        )
-                        self.console.print(error_panel)
+                        self.console.print(f"[green]✅ URL {i} completed successfully[/green]")
+                        
+                    except Exception as e:
+                        failed_urls += 1
+                        self.console.print(f"[red]❌ URL {i} failed: {str(e)}[/red]")
+                        continue
+                
+                # Update final stats
+                self.session_stats["successful_requests"] += successful_urls
+                self.session_stats["failed_requests"] += failed_urls
+                
+                # Display batch results summary
+                if len(target_urls) > 1:
+                    self.display_batch_results(all_results, successful_urls, failed_urls)
+                else:
+                    # Single URL - display normal results
+                    if all_results:
+                        self.display_results(all_results[0])
+                
+            except Exception as e:
+                # Update failure stats for overall operation
+                self.session_stats["failed_requests"] += len(target_urls)
+                
+                self.console.print(f"\n[red]❌ Scraping operation failed: {str(e)}[/red]")
+                
+                # Offer detailed error information
+                if Confirm.ask("[cyan]Would you like to see detailed error information?[/cyan]"):
+                    error_panel = Panel(
+                        str(e),
+                        title="🔍 Error Details",
+                        border_style="red"
+                    )
+                    self.console.print(error_panel)
                 
                 # Ask if user wants to continue
                 if not Confirm.ask("\n[bold cyan]Would you like to perform another scraping operation?[/cyan]"):
@@ -599,6 +692,79 @@ class IntelligentScrapingApp:
         self.display_session_stats()
         self.console.print("\n[dim]🙏 Thank you for using Intelligent Web Scraper!")
         self.console.print("[dim]Built with ❤️  using Atomic Agents framework[/dim]")
+
+    def display_batch_results(self, results: list, successful_urls: int, failed_urls: int) -> None:
+        """Display batch scraping results summary."""
+        self.console.print(Rule("[bold green]📊 Batch Scraping Results[/bold green]"))
+        
+        # Batch summary
+        batch_table = Table(title="🎯 Batch Summary", title_style="bold green")
+        batch_table.add_column("Metric", style="cyan", width=20)
+        batch_table.add_column("Value", style="green", width=15)
+        batch_table.add_column("Details", style="dim", width=40)
+        
+        total_items = sum(len(result.extracted_data) if hasattr(result, 'extracted_data') and result.extracted_data else 0 for result in results)
+        avg_quality = sum(result.quality_score if hasattr(result, 'quality_score') else 0 for result in results) / len(results) if results else 0
+        
+        batch_table.add_row("URLs Processed", f"{successful_urls + failed_urls}", f"{successful_urls} successful, {failed_urls} failed")
+        batch_table.add_row("Total Items", str(total_items), "Combined data from all successful URLs")
+        batch_table.add_row("Average Quality", f"{avg_quality:.1f}%", "Average quality score across all URLs")
+        batch_table.add_row("Success Rate", f"{(successful_urls/(successful_urls + failed_urls)*100):.1f}%", "Percentage of successful URL processing")
+        
+        self.console.print(batch_table)
+        
+        # Individual URL results
+        if results:
+            url_table = Table(title="📋 Individual URL Results", title_style="bold blue")
+            url_table.add_column("#", style="cyan", width=3)
+            url_table.add_column("URL", style="blue", width=40)
+            url_table.add_column("Items", style="green", width=8)
+            url_table.add_column("Quality", style="yellow", width=10)
+            url_table.add_column("Status", style="bold", width=10)
+            
+            for result in results:
+                items_count = len(result.extracted_data) if hasattr(result, 'extracted_data') and result.extracted_data else 0
+                quality_score = result.quality_score if hasattr(result, 'quality_score') else 0
+                url_display = result.source_url[:37] + "..." if len(result.source_url) > 40 else result.source_url
+                
+                url_table.add_row(
+                    str(result.batch_index),
+                    url_display,
+                    str(items_count),
+                    f"{quality_score:.1f}%",
+                    "[green]SUCCESS[/green]"
+                )
+            
+            self.console.print(url_table)
+        
+        # Export information
+        if results and hasattr(results[0], 'export_options'):
+            self.console.print("\n[bold cyan]💾 Batch Export Files:[/bold cyan]")
+            for i, result in enumerate(results, 1):
+                if hasattr(result, 'export_options') and result.export_options:
+                    self.console.print(f"[dim]URL {i}:[/dim]")
+                    for format_type, path in result.export_options.items():
+                        self.console.print(f"  • {format_type.upper()}: {path}")
+        
+        # Sample data from first successful result
+        if results and hasattr(results[0], 'extracted_data') and results[0].extracted_data:
+            self.console.print(Rule("[bold]📋 Sample Data (from first URL)[/bold]"))
+            sample_data = results[0].extracted_data[:2]  # Show first 2 items
+            
+            for i, item in enumerate(sample_data, 1):
+                if isinstance(item, dict):
+                    formatted_item = "\n".join([f"[cyan]{k}:[/cyan] {v}" for k, v in item.items()])
+                else:
+                    formatted_item = str(item)
+                
+                item_panel = Panel(
+                    formatted_item,
+                    title=f"📄 Sample Item {i}",
+                    title_align="left",
+                    border_style="dim blue",
+                    padding=(1, 2)
+                )
+                self.console.print(item_panel)
 
 
     def display_results(self, result) -> None:

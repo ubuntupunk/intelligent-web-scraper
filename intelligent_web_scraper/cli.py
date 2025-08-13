@@ -32,8 +32,14 @@ Examples:
   # Interactive mode (default)
   intelligent-web-scraper
 
-  # Direct scraping with parameters
-  intelligent-web-scraper --url "https://example.com" --request "Extract all product names"
+  # Direct scraping with single URL
+  intelligent-web-scraper --direct --url "https://example.com" --request "Extract all product names"
+
+  # Batch scraping with multiple URLs
+  intelligent-web-scraper --direct --urls "https://site1.com" "https://site2.com" --request "Extract titles"
+
+  # Batch scraping from file
+  intelligent-web-scraper --direct --urls-file urls.txt --request "Extract product information"
 
   # Batch processing from config file
   intelligent-web-scraper --config scraping_config.json
@@ -71,6 +77,19 @@ For more information, visit: https://github.com/atomic-agents/intelligent-web-sc
         "--url",
         type=str,
         help="Target URL to scrape"
+    )
+    
+    parser.add_argument(
+        "--urls",
+        type=str,
+        nargs="+",
+        help="Multiple target URLs for batch scraping"
+    )
+    
+    parser.add_argument(
+        "--urls-file",
+        type=str,
+        help="File containing URLs (one per line) for batch scraping"
     )
     
     parser.add_argument(
@@ -173,17 +192,67 @@ def load_config_from_file(config_path: str) -> Dict[str, Any]:
         raise ValueError(f"Invalid JSON in configuration file: {e}")
 
 
+def load_urls_from_file(file_path: str) -> list[str]:
+    """Load URLs from a file (one per line)."""
+    try:
+        with open(file_path, 'r') as f:
+            urls = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+        return urls
+    except FileNotFoundError:
+        raise FileNotFoundError(f"URLs file not found: {file_path}")
+    except Exception as e:
+        raise ValueError(f"Error reading URLs file: {e}")
+
+
+def validate_url(url: str) -> bool:
+    """Validate a single URL format."""
+    return url.startswith('http://') or url.startswith('https://')
+
+
+def get_target_urls(args: argparse.Namespace) -> list[str]:
+    """Get target URLs from various sources."""
+    urls = []
+    
+    # Single URL
+    if args.url:
+        urls.append(args.url)
+    
+    # Multiple URLs from command line
+    if args.urls:
+        urls.extend(args.urls)
+    
+    # URLs from file
+    if args.urls_file:
+        file_urls = load_urls_from_file(args.urls_file)
+        urls.extend(file_urls)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_urls = []
+    for url in urls:
+        if url not in seen:
+            seen.add(url)
+            unique_urls.append(url)
+    
+    return unique_urls
+
+
 def validate_direct_mode_args(args: argparse.Namespace) -> None:
     """Validate arguments for direct mode."""
     if args.direct:
-        if not args.url:
-            raise ValueError("--url is required in direct mode")
+        # Get target URLs
+        target_urls = get_target_urls(args)
+        
+        if not target_urls:
+            raise ValueError("At least one URL is required in direct mode (use --url, --urls, or --urls-file)")
+        
         if not args.request:
             raise ValueError("--request is required in direct mode")
         
-        # Validate URL format
-        if not (args.url.startswith('http://') or args.url.startswith('https://')):
-            raise ValueError("URL must start with http:// or https://")
+        # Validate URL formats
+        for url in target_urls:
+            if not validate_url(url):
+                raise ValueError(f"Invalid URL format: {url} (must start with http:// or https://)")
         
         # Validate quality threshold
         if not (0 <= args.quality_threshold <= 100):
@@ -198,52 +267,110 @@ async def run_direct_mode(args: argparse.Namespace, config: IntelligentScrapingC
     """Run scraping in direct mode with provided parameters."""
     console = Console()
     
+    # Get target URLs
+    target_urls = get_target_urls(args)
+    
     if not args.quiet:
         console.print("[bold blue]🤖 Intelligent Web Scraper - Direct Mode[/bold blue]")
-        console.print(f"[cyan]URL:[/cyan] {args.url}")
+        if len(target_urls) == 1:
+            console.print(f"[cyan]URL:[/cyan] {target_urls[0]}")
+        else:
+            console.print(f"[cyan]URLs:[/cyan] {len(target_urls)} URLs for batch processing")
         console.print(f"[cyan]Request:[/cyan] {args.request}")
         console.print()
     
     # Create orchestrator
     orchestrator = IntelligentScrapingOrchestrator(config=config)
     
-    # Prepare request data
-    request_data = {
-        "scraping_request": args.request,
-        "target_url": args.url,
-        "max_results": args.max_results,
-        "quality_threshold": args.quality_threshold,
-        "export_format": args.export_format,
-        "enable_monitoring": args.enable_monitoring and not args.disable_monitoring,
-        "concurrent_instances": args.concurrent_instances
-    }
+    # Process each URL
+    all_results = []
+    successful_urls = 0
+    failed_urls = 0
+    total_items = 0
     
-    try:
-        if not args.quiet:
-            console.print("[yellow]🔄 Processing scraping request...[/yellow]")
-        
-        # Execute scraping
-        result = await orchestrator.run(request_data)
-        
-        if not args.quiet:
-            console.print("[green]✅ Scraping completed successfully![/green]")
+    for i, target_url in enumerate(target_urls, 1):
+        try:
+            if not args.quiet and len(target_urls) > 1:
+                console.print(f"[blue]Processing URL {i}/{len(target_urls)}:[/blue] {target_url}")
             
-            # Display summary
+            # Prepare request data
+            request_data = {
+                "scraping_request": args.request,
+                "target_url": target_url,
+                "max_results": args.max_results,
+                "quality_threshold": args.quality_threshold,
+                "export_format": args.export_format,
+                "enable_monitoring": args.enable_monitoring and not args.disable_monitoring,
+                "concurrent_instances": args.concurrent_instances,
+                "batch_index": i,
+                "batch_total": len(target_urls)
+            }
+            
+            if not args.quiet:
+                console.print("[yellow]🔄 Processing scraping request...[/yellow]")
+            
+            # Execute scraping
+            result = await orchestrator.run(request_data)
+            
+            # Store result with URL info
+            result.source_url = target_url
+            result.batch_index = i
+            all_results.append(result)
+            successful_urls += 1
+            
+            # Count items
             items_count = len(result.extracted_data) if hasattr(result, 'extracted_data') and result.extracted_data else 0
-            console.print(f"[cyan]Items extracted:[/cyan] {items_count}")
+            total_items += items_count
             
-            if hasattr(result, 'quality_score'):
-                console.print(f"[cyan]Quality score:[/cyan] {result.quality_score:.1f}%")
+            if not args.quiet:
+                if len(target_urls) == 1:
+                    console.print("[green]✅ Scraping completed successfully![/green]")
+                else:
+                    console.print(f"[green]✅ URL {i} completed: {items_count} items extracted[/green]")
             
-            if hasattr(result, 'export_options') and result.export_options:
-                console.print("[cyan]Export files:[/cyan]")
-                for format_type, path in result.export_options.items():
-                    console.print(f"  • {format_type.upper()}: {path}")
+        except Exception as e:
+            failed_urls += 1
+            if not args.quiet:
+                console.print(f"[red]❌ URL {i} failed: {str(e)}[/red]")
+            continue
+    
+    # Display results summary
+    if not args.quiet:
+        if len(target_urls) > 1:
+            # Batch summary
+            console.print(f"\n[bold green]📊 Batch Results Summary[/bold green]")
+            console.print(f"[cyan]URLs processed:[/cyan] {successful_urls}/{len(target_urls)}")
+            console.print(f"[cyan]Total items extracted:[/cyan] {total_items}")
+            console.print(f"[cyan]Success rate:[/cyan] {(successful_urls/len(target_urls)*100):.1f}%")
+        else:
+            # Single URL summary
+            if all_results:
+                result = all_results[0]
+                items_count = len(result.extracted_data) if hasattr(result, 'extracted_data') and result.extracted_data else 0
+                console.print(f"[cyan]Items extracted:[/cyan] {items_count}")
+                
+                if hasattr(result, 'quality_score'):
+                    console.print(f"[cyan]Quality score:[/cyan] {result.quality_score:.1f}%")
         
-        # Output JSON result for programmatic use
-        if args.verbose or args.debug:
+        # Export files
+        if all_results:
+            console.print("[cyan]Export files:[/cyan]")
+            for i, result in enumerate(all_results, 1):
+                if hasattr(result, 'export_options') and result.export_options:
+                    if len(target_urls) > 1:
+                        console.print(f"  URL {i}:")
+                    for format_type, path in result.export_options.items():
+                        prefix = "    " if len(target_urls) > 1 else "  "
+                        console.print(f"{prefix}• {format_type.upper()}: {path}")
+    
+    # Output JSON result for programmatic use
+    if args.verbose or args.debug:
+        if len(target_urls) == 1 and all_results:
+            # Single URL output
+            result = all_results[0]
             output_data = {
                 "success": True,
+                "url": target_urls[0],
                 "items_extracted": len(result.extracted_data) if hasattr(result, 'extracted_data') and result.extracted_data else 0,
                 "quality_score": result.quality_score if hasattr(result, 'quality_score') else None,
                 "export_options": result.export_options if hasattr(result, 'export_options') else {},
@@ -254,20 +381,42 @@ async def run_direct_mode(args: argparse.Namespace, config: IntelligentScrapingC
                 output_data["extracted_data"] = result.extracted_data if hasattr(result, 'extracted_data') else []
                 output_data["scraping_plan"] = result.scraping_plan if hasattr(result, 'scraping_plan') else ""
                 output_data["reasoning"] = result.reasoning if hasattr(result, 'reasoning') else ""
+        else:
+            # Batch output
+            output_data = {
+                "success": successful_urls > 0,
+                "batch_summary": {
+                    "total_urls": len(target_urls),
+                    "successful_urls": successful_urls,
+                    "failed_urls": failed_urls,
+                    "total_items_extracted": total_items,
+                    "success_rate": (successful_urls/len(target_urls)*100) if target_urls else 0
+                },
+                "results": []
+            }
             
-            console.print_json(data=output_data)
+            for result in all_results:
+                result_data = {
+                    "url": result.source_url,
+                    "batch_index": result.batch_index,
+                    "items_extracted": len(result.extracted_data) if hasattr(result, 'extracted_data') and result.extracted_data else 0,
+                    "quality_score": result.quality_score if hasattr(result, 'quality_score') else None,
+                    "export_options": result.export_options if hasattr(result, 'export_options') else {}
+                }
+                
+                if args.debug:
+                    result_data["extracted_data"] = result.extracted_data if hasattr(result, 'extracted_data') else []
+                    result_data["scraping_plan"] = result.scraping_plan if hasattr(result, 'scraping_plan') else ""
+                    result_data["reasoning"] = result.reasoning if hasattr(result, 'reasoning') else ""
+                
+                output_data["results"].append(result_data)
         
-    except Exception as e:
+        console.print_json(data=output_data)
+    
+    # Exit with error if all URLs failed
+    if successful_urls == 0:
         if not args.quiet:
-            console.print(f"[red]❌ Scraping failed: {str(e)}[/red]")
-        
-        if args.verbose or args.debug:
-            console.print_json(data={
-                "success": False,
-                "error": str(e),
-                "error_type": type(e).__name__
-            })
-        
+            console.print(f"[red]❌ All {len(target_urls)} URL(s) failed to process[/red]")
         sys.exit(1)
 
 
